@@ -47,7 +47,7 @@ struct ContentView: View {
         }
         .padding()
         .onAppear {
-            game.reset()
+            game.reset(self)
         }
     }
     
@@ -193,8 +193,9 @@ struct ContentView: View {
 }
 
 extension ContentView: NotationDelegate {
-    func notationDidChange(_ notation: Notation) {
-        
+    func notation(_ notation: Notation, didAddMove move: Notation.Move) {
+        // TODO: add notation view
+        print(move)
     }
 }
 

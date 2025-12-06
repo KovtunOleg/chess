@@ -24,19 +24,20 @@ final class Game {
     
     init() {
         board = [[Square]].empty
-        notation = Notation()
         turn = .white
+        notation = Notation()
     }
     
     func reset(_ notationDelegate: NotationDelegate? = nil) {
-        move(Piece(color: .white, type: .king), to: board[0][4], force: true)
-        move(Piece(color: .white, type: .rook), to: board[0][0], force: true)
-        move(Piece(color: .white, type: .rook), to: board[0][7], force: true)
-        move(Piece(color: .white, type: .pawn), to: board[1][4], force: true)
-        move(Piece(color: .black, type: .queen), to: board[7][3], force: true)
-        move(Piece(color: .black, type: .pawn), to: board[6][3], force: true)
-        move(Piece(color: .black, type: .knight), to: board[7][1], force: true)
-        turn = .white
+        do {
+            let (board, turn, notation) = try FENParser.parse(fen: FENParser.startPosition)
+            self.board = board
+            self.turn = turn
+            self.notation = notation
+        } catch {
+            guard error is FENParser.ParsingError else { print("Unknown error"); return }
+            print("Invalid FEN format")
+        }
         notation.delegate = notationDelegate
     }
     
@@ -51,9 +52,14 @@ final class Game {
             destinationPiece = square(at: destination.position).piece?.copy
             switch piece.type {
             case .pawn:
-                // enPassant
-                guard destinationPiece == nil, destination.position.file != source.file else { break }
-                square(at: Position(rank: source.rank, file: destination.position.file)).piece = nil
+                guard destinationPiece == nil else { break }
+                if destination.position.file != source.file {
+                    // enPassant
+                    square(at: Position(rank: source.rank, file: destination.position.file)).piece = nil
+                } else if destination.position.rank == 0 || destination.position.rank == Game.size - 1 {
+                    // promotion
+                    
+                }
             case .king:
                 // castle
                 guard destinationPiece == nil, destination.position.rank == source.rank, abs(source.file - destination.position.file) > 1 else { break }
@@ -62,7 +68,6 @@ final class Game {
                 destinationPiece = square(at: rookPosition).piece?.copy
                 square(at: Position(rank: source.rank, file: source.file > destination.position.file ? source.file - 1 : source.file + 1)).piece = destinationPiece
                 square(at: rookPosition).piece = nil
-                
             default: break
             }
             square(at: source).piece = nil
@@ -89,7 +94,7 @@ final class Game {
                 position = Position(rank: position.rank + direction[0], file: position.file + direction[1])
                 guard isLegalMove(piece, to: position, testCheck: testCheck) else { break }
                 moves.append(position)
-                if let pawn = square(at: position).piece, pawn.type == .pawn { break }
+                guard square(at: position).piece == nil else { break }
                 count += 1
             }
         }
@@ -108,7 +113,7 @@ final class Game {
             // take
             for file in [-1, 1] {
                 let takePosition = Position(rank: position.rank + (piece.color == .white ? 1 : -1), file: position.file + file)
-                guard let enemyPiece = square(at: takePosition).piece, enemyPiece.color != piece.color else { continue }
+                guard takePosition.isValid, let enemyPiece = square(at: takePosition).piece, enemyPiece.color != piece.color else { continue }
                 pawnMoves.append(takePosition)
             }
             moves.append(contentsOf: pawnMoves.filter { isLegalMove(piece, to: $0, testCheck: testCheck) } )
@@ -174,13 +179,13 @@ extension Game {
     }
     
     private func updateNotation(sourcePiece: Piece, destinationPiece: Piece?, for position: Position) {
-        let oponentColor: Piece.Color = sourcePiece.color == .white ? .black : .white
+        let opponentColor: Piece.Color = sourcePiece.color == .white ? .black : .white
         let move: Notation.Move = {
-            if isCheck(color: oponentColor) {
-                guard isMate(isCheck: true, color: oponentColor) else { return .check(piece: sourcePiece) }
+            if isCheck(color: opponentColor) {
+                guard isMate(isCheck: true, color: opponentColor) else { return .check(piece: sourcePiece) }
                 return .mate(piece: sourcePiece)
             } else {
-                guard isStalemate(isCheck: false, color: oponentColor) else { return .stalemate(piece: sourcePiece) }
+                guard isStalemate(isCheck: false, color: opponentColor) else { return .stalemate(piece: sourcePiece) }
                 if let destinationPiece {
                     guard sourcePiece.type == .king, destinationPiece.type == .rook, sourcePiece.color == destinationPiece.color,
                           let kingPosition = sourcePiece.position, let rookPosition = destinationPiece.position

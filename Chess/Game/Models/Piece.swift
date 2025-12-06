@@ -31,6 +31,7 @@ class Piece {
 extension Piece {
     enum `Type` {
         case king, queen, rook, bishop, knight, pawn
+        
     }
     enum Color {
         case white, black
