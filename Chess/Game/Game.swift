@@ -11,71 +11,72 @@ import Observation
 @Observable
 final class Game {
     static let size = 8
-    private var board: [[Square]]
-    private var notation: Notation
+    private(set) var board: [[Square]]
+    private(set) var notation: Notation
     private(set) var turn: Piece.Color
     private var copy: Game {
         let game = Game()
         game.board = board.copy
         game.notation = notation
         game.turn = turn
+        game.notation.delegate = nil
+        
         return game
     }
     
-    init() {
-        board = [[Square]].empty
-        turn = .white
-        notation = Notation()
-    }
+    var onPromote: ((Piece, Position) -> Task<Piece, Never>)? // default to queen
     
-    func reset(_ notationDelegate: NotationDelegate? = nil) {
-        do {
-            let (board, turn, notation) = try FENParser.parse(fen: FENParser.startPosition)
-            self.board = board
-            self.turn = turn
-            self.notation = notation
-        } catch {
-            guard error is FENParser.ParsingError else { print("Unknown error"); return }
-            print("Invalid FEN format")
-        }
-        notation.delegate = notationDelegate
+    init(board: [[Square]] = [[Square]].empty, notation: Notation = Notation(), turn: Piece.Color = .white) {
+        self.board = board
+        self.turn = turn
+        self.notation = notation
     }
     
     @discardableResult
-    func move(_ piece: Piece, to destination: Square, force: Bool = false) -> Bool {
-        guard force || moves(for: piece).contains(destination.position) else { return false }
-        var sourcePiece: Piece?
+    func move(_ piece: Piece, to destination: Square, force: Bool = false) async -> Bool {
+        if !force {
+            let moves = await moves(for: piece)
+            guard moves.contains(destination.position) else { return false }
+        }
+        var sourcePiece: Piece
         var destinationPiece: Piece?
+        var promotionPiece: Piece?
+        var move = Notation.Move.unknown
         if let source = piece.position {
             piece.movesCount += 1
             sourcePiece = piece.copy
             destinationPiece = square(at: destination.position).piece?.copy
+            move = .move(piece: sourcePiece, to: destination.position, captured: destinationPiece)
             switch piece.type {
             case .pawn:
-                guard destinationPiece == nil else { break }
-                if destination.position.file != source.file {
+                if destinationPiece == nil, destination.position.file != source.file {
                     // enPassant
-                    square(at: Position(rank: source.rank, file: destination.position.file)).piece = nil
+                    let enPassantEnemyPosition = Position(rank: source.rank, file: destination.position.file)
+                    move = .move(piece: sourcePiece, to: destination.position, captured: square(at: enPassantEnemyPosition).piece?.copy)
+                    square(at: enPassantEnemyPosition).piece = nil
                 } else if destination.position.rank == 0 || destination.position.rank == Game.size - 1 {
                     // promotion
-                    
+                    promotionPiece = await onPromote?(piece, destination.position).value ?? Piece(color: piece.color, type: .queen, movesCount: piece.movesCount)
+                    promotionPiece?.movesCount = piece.movesCount
+                    move = .move(piece: sourcePiece, to: destination.position, captured: destinationPiece, promoted: promotionPiece)
                 }
             case .king:
                 // castle
                 guard destinationPiece == nil, destination.position.rank == source.rank, abs(source.file - destination.position.file) > 1 else { break }
                 let rookPosition = Position(rank: source.rank, file: source.file > destination.position.file ? 0 : Game.size - 1)
-                destinationPiece?.movesCount += 1
+                destinationPiece?.movesCount = piece.movesCount
                 destinationPiece = square(at: rookPosition).piece?.copy
                 square(at: Position(rank: source.rank, file: source.file > destination.position.file ? source.file - 1 : source.file + 1)).piece = destinationPiece
                 square(at: rookPosition).piece = nil
-            default: break
+                move = .castle(king: sourcePiece, rook: destinationPiece!, short: abs(source.file - rookPosition.file) == 3)
+            default:
+                break
             }
             square(at: source).piece = nil
         }
-        square(at: destination.position).piece = piece
-        if let sourcePiece {
-            updateNotation(sourcePiece: sourcePiece, destinationPiece: destinationPiece, for: destination.position)
-            turn.toggle()
+        square(at: destination.position).piece = promotionPiece ?? piece
+        if !force {
+            await updateNotation(with: move)
         }
         return true
     }
@@ -84,15 +85,18 @@ final class Game {
         board[position.rank][position.file]
     }
     
-    func moves(for piece: Piece, testCheck: Bool = true) -> [Position] {
-        guard let position = piece.position, piece.color == turn else { return [] }
+    func moves(for piece: Piece, testCheck: Bool = true) async -> [Position] {
+        guard let position = piece.position, notation.state == .play || notation.state == .check else { return [] }
         var moves = [Position]()
         for direction in piece.directions {
             var count = 0
             var position = position
             while count < piece.limit {
                 position = Position(rank: position.rank + direction[0], file: position.file + direction[1])
-                guard isLegalMove(piece, to: position, testCheck: testCheck) else { break }
+                guard position.isValid else { break }
+                if let otherPiece = square(at: position).piece,
+                   (piece.type != .pawn && piece.color == otherPiece.color) ||
+                    (piece.type == .pawn && piece.position?.file == otherPiece.position?.file) { break }
                 moves.append(position)
                 guard square(at: position).piece == nil else { break }
                 count += 1
@@ -100,26 +104,26 @@ final class Game {
         }
         switch piece.type {
         case .pawn:
-            var pawnMoves = [Position]()
             // enPassant
-            if case let .move(piece: pawn, to: pawnPosition) = notation.moves.last, let prevPawnPosition = pawn.position,
+            if case let .move(piece: pawn, to: pawnPosition, _, _) = notation.moves.last, let prevPawnPosition = pawn.position,
                pawn.type == .pawn, pawn.movesCount == 1, abs(prevPawnPosition.rank - pawnPosition.rank) == 2 {
                 for file in [-1, 1] {
                     guard position.rank == pawnPosition.rank, (position.file - pawnPosition.file) == file else { continue }
                     let enPassantPosition = Position(rank: position.rank + (piece.color == .white ? 1 : -1), file: pawnPosition.file)
-                    pawnMoves.append(enPassantPosition)
+                    moves.append(enPassantPosition)
                 }
             }
             // take
             for file in [-1, 1] {
                 let takePosition = Position(rank: position.rank + (piece.color == .white ? 1 : -1), file: position.file + file)
                 guard takePosition.isValid, let enemyPiece = square(at: takePosition).piece, enemyPiece.color != piece.color else { continue }
-                pawnMoves.append(takePosition)
+                moves.append(takePosition)
             }
-            moves.append(contentsOf: pawnMoves.filter { isLegalMove(piece, to: $0, testCheck: testCheck) } )
         case .king:
             // castle
-            guard !isCheck(color: piece.color) else { break }
+            if testCheck {
+                guard !(await isCheck(color: piece.color)) else { break }
+            }
             let rooks = board.pieces.filter({ $0.type == .rook && $0.color == piece.color })
             outer: for rook in rooks {
                 guard rook.movesCount == 0, piece.movesCount == 0, let rookPosition = rook.position else { continue }
@@ -128,74 +132,80 @@ final class Game {
                 var count = 0
                 while position != rookPosition, count < 2 {
                     position = Position(rank: position.rank, file: position.file + direction)
-                    guard square(at: position).piece == nil, isLegalMove(piece, to: position, testCheck: testCheck) else { continue outer }
+                    guard square(at: position).piece == nil, await isLegalMove(piece, to: position, testCheck: testCheck) else { continue outer }
                     count += 1
                 }
                 moves.append(position)
             }
         default: break
         }
-        return moves
+        var legalMoves = [Position]()
+        for move in moves where await isLegalMove(piece, to: move, testCheck: testCheck)  {
+            legalMoves.append(move)
+        }
+        return legalMoves
     }
 }
 
 extension Game {
-    private func isCheck(color: Piece.Color) -> Bool {
+    private func isCheck(color: Piece.Color) async -> Bool {
         let pieces = board.pieces
         let enemyPieces = pieces.filter { $0.color != color }
         guard let king = pieces.first(where: { $0.type == .king && $0.color == color }),
               let position = king.position else { return false }
         for enemyPiece in enemyPieces {
-            var moves = moves(for: enemyPiece, testCheck: false)
-            switch enemyPiece.type {
-            case .pawn:
-                moves.removeAll(where: { $0.file == position.file })
-            default: break
-            }
+            let moves = await moves(for: enemyPiece, testCheck: false)
             guard !moves.contains(position) else { return true }
         }
         return false
     }
     
-    private func isMate(isCheck: Bool, color: Piece.Color) -> Bool {
-        guard isCheck else { return false }
-        guard let king = board.pieces.first(where: { $0.type == .king && $0.color == color }) else { return false }
-        return moves(for: king, testCheck: false).isEmpty
+    private func isMate(isCheck: Bool, hasMoves: Bool) -> Bool {
+        isCheck && !hasMoves
     }
     
-    private func isStalemate(isCheck: Bool, color: Piece.Color) -> Bool {
+    private func isDraw(isCheck: Bool, hasMoves: Bool, color: Piece.Color) -> Bool {
         guard !isCheck else { return false }
-        return !board.pieces.contains(where: { $0.color == color && !moves(for: $0, testCheck: false).isEmpty })
+        let pieces = board.pieces
+        func isSufficientMaterial(_ pieces: [Piece]) -> Bool {
+            let set = pieces.map { $0.type == .bishop ? "\($0.position?.isLight == true ? "l" : "d")" : $0.description } // include case for same color bishops
+            guard set.count < 3 else { return true }
+            return !pieces.contains(where: { $0.type == .bishop || $0.type == .knight })
+        }
+        let currentPieces = pieces.filter { $0.color == color }
+        let enemyPieces = pieces.filter { $0.color != color }
+        return !hasMoves ||
+        !isSufficientMaterial(currentPieces) && !isSufficientMaterial(enemyPieces) // unsufficient material
     }
     
-    private func isLegalMove(_ piece: Piece, to position: Position, testCheck: Bool) -> Bool {
-        guard position.isValid else { return false }
-        if let otherPiece = square(at: position).piece,
-           piece.color == otherPiece.color { return false }
+    private func hasMoves(color: Piece.Color) async -> Bool {
+        let currentPieces = board.pieces.filter { $0.color == color }
+        return await {
+            for piece in currentPieces where !(await moves(for: piece, testCheck: true).isEmpty) {
+                return true
+            }
+            return false
+        }()
+    }
+    
+    private func isLegalMove(_ piece: Piece, to position: Position, testCheck: Bool) async -> Bool {
         guard testCheck, let sourcePosition = piece.position else { return true }
         let copy = copy
-        copy.move(copy.square(at: sourcePosition).piece!, to: copy.square(at: position), force: true)
-        return !copy.isCheck(color: piece.color)
+        await copy.move(copy.square(at: sourcePosition).piece!, to: copy.square(at: position), force: true)
+        return !(await copy.isCheck(color: piece.color))
     }
     
-    private func updateNotation(sourcePiece: Piece, destinationPiece: Piece?, for position: Position) {
-        let opponentColor: Piece.Color = sourcePiece.color == .white ? .black : .white
-        let move: Notation.Move = {
-            if isCheck(color: opponentColor) {
-                guard isMate(isCheck: true, color: opponentColor) else { return .check(piece: sourcePiece) }
-                return .mate(piece: sourcePiece)
-            } else {
-                guard isStalemate(isCheck: false, color: opponentColor) else { return .stalemate(piece: sourcePiece) }
-                if let destinationPiece {
-                    guard sourcePiece.type == .king, destinationPiece.type == .rook, sourcePiece.color == destinationPiece.color,
-                          let kingPosition = sourcePiece.position, let rookPosition = destinationPiece.position
-                    else { return .capture(piece: sourcePiece, captured: destinationPiece) }
-                    return .castle(king: sourcePiece, rook: destinationPiece, short: abs(kingPosition.file - rookPosition.file) == 3 )
-                } else {
-                    return .move(piece: sourcePiece, to: position)
-                }
-            }
+    private func updateNotation(with move: Notation.Move) async {
+        let opponentColor: Piece.Color = turn == .white ? .black : .white
+        let state: Notation.State = await {
+            let hasMoves = await hasMoves(color: opponentColor)
+            guard !(await isCheck(color: opponentColor)) else { return isMate(isCheck: true, hasMoves: hasMoves) ? .mate(winner: turn) : .check }
+            return isDraw(isCheck: false, hasMoves: hasMoves, color: opponentColor) ? .draw : .play
         }()
-        notation.append(move)
+        notation.update(with: move, state: state)
+        switch state {
+        case .play, .check: turn.toggle()
+        default: break
+        }
     }
 }

@@ -29,12 +29,29 @@ class Piece {
 }
 
 extension Piece {
-    enum `Type` {
+    enum `Type`: Hashable, CustomStringConvertible {
         case king, queen, rook, bishop, knight, pawn
         
+        var description: String {
+            switch self {
+            case .queen: return "Q"
+            case .king: return "K"
+            case .rook: return "R"
+            case .bishop: return "B"
+            case .knight: return "N"
+            default: return ""
+            }
+        }
     }
-    enum Color {
+    enum Color: Hashable, CustomStringConvertible {
         case white, black
+        
+        var description: String {
+            switch self {
+            case .white: return "w"
+            case .black: return "b"
+            }
+        }
         
         mutating func toggle() {
             switch self {
@@ -42,6 +59,13 @@ extension Piece {
             case .black: self = .white
             }
         }
+    }
+}
+
+extension Piece: CustomStringConvertible {
+    var description: String {
+        guard let position else { return type.description }
+        return "\(type.description)\(position.description)"
     }
 }
 
