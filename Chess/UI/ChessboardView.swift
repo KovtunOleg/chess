@@ -8,6 +8,7 @@
 import SwiftUI
 
 @MainActor struct ChessboardView: View {
+    private typealias Move = (from: Position, to: Position)
     private typealias Promoted = (piece: Piece, position: Position)
     
     @State private var game: Game
@@ -24,6 +25,7 @@ import SwiftUI
     }
     @State private var promoted: Promoted?
     @State private var checked: Piece?
+    @State private var lastMove: Move?
     private static let boardCoordinateSpace = "board"
     
     init(_ game: Game) {
@@ -98,6 +100,7 @@ import SwiftUI
         ZStack {
             Rectangle()
                 .fill(baseColor)
+                .border(.blue.opacity(lastMove?.from == square.position ? 0.5 : 1), width: lastMove?.from == square.position || lastMove?.to == square.position ? 4 : 0)
                 .frame(width: size, height: size)
             
             if let piece = square.piece {
@@ -262,6 +265,14 @@ extension ChessboardView: NotationDelegate {
                 checked = game.board.pieces.first(where: { $0.color == game.turn && $0.type == .king })
             default:
                 checked = nil
+            }
+            switch move {
+            case let .move(piece: piece, to: position, captured: _, promoted: _):
+                lastMove = (from: piece.position!, to: position)
+            case let .castle(king: king, rook: _, short: short):
+                lastMove = (from: king.position!, to: Position(rank: king.position!.rank, file: short ? 3 : 5))
+            case .unknown:
+                lastMove = nil
             }
         }
     }
