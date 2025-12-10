@@ -164,18 +164,19 @@ extension Game {
         isCheck && !hasMoves
     }
     
-    private func isDraw(isCheck: Bool, hasMoves: Bool, color: Piece.Color) -> Bool {
-        guard !isCheck else { return false }
+    private func isDraw(isCheck: Bool, hasMoves: Bool, position: String, color: Piece.Color) -> Notation.State.DrawReason? {
+        guard !isCheck else { return nil }
         let pieces = board.pieces
         func isSufficientMaterial(_ pieces: [Piece]) -> Bool {
             let set = pieces.map { $0.type == .bishop ? "\($0.position?.isLight == true ? "l" : "d")" : $0.description } // include case for same color bishops
             guard set.count < 3 else { return true }
             return !pieces.contains(where: { $0.type == .bishop || $0.type == .knight })
         }
-        let currentPieces = pieces.filter { $0.color == color }
-        let enemyPieces = pieces.filter { $0.color != color }
-        return !hasMoves ||
-        !isSufficientMaterial(currentPieces) && !isSufficientMaterial(enemyPieces) // unsufficient material
+        guard hasMoves else { return .stalemate }
+        guard notation.positions[position, default: 0] < 2 else { return .threefoldRepetition }
+        guard isSufficientMaterial(pieces.filter { $0.color == color }) ||
+                isSufficientMaterial(pieces.filter { $0.color != color }) else { return .insufficientMaterial }
+        return nil
     }
     
     private func hasMoves(color: Piece.Color) async -> Bool {
@@ -197,15 +198,17 @@ extension Game {
     
     private func updateNotation(with move: Notation.Move) async {
         let opponentColor: Piece.Color = turn == .white ? .black : .white
+        let position = String(FENParser.parse(game: self).split(separator: " ")[0])
         let state: Notation.State = await {
             let hasMoves = await hasMoves(color: opponentColor)
             guard !(await isCheck(color: opponentColor)) else { return isMate(isCheck: true, hasMoves: hasMoves) ? .mate(winner: turn) : .check }
-            return isDraw(isCheck: false, hasMoves: hasMoves, color: opponentColor) ? .draw : .play
+            guard let drawReason = isDraw(isCheck: false, hasMoves: hasMoves, position: position, color: opponentColor) else { return .play }
+            return .draw(reason: drawReason)
         }()
-        notation.update(with: move, state: state)
         switch state {
         case .play, .check: turn.toggle()
         default: break
         }
+        notation.update(with: move, state: state, position: position)
     }
 }

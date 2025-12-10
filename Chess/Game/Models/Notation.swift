@@ -30,10 +30,26 @@ struct Notation {
     }
     
     enum State: Hashable, CustomStringConvertible {
+        enum DrawReason: Hashable, CustomStringConvertible {
+            case threefoldRepetition
+            case insufficientMaterial
+            case fiftyMoveRule
+            case stalemate
+            
+            var description: String {
+                switch self {
+                case .threefoldRepetition: "Threefold repetition"
+                case .fiftyMoveRule: "Fifty move rule"
+                case .insufficientMaterial: "Insufficient material"
+                case .stalemate: "Stalemate"
+                }
+            }
+        }
+        
         case play
         case check
         case mate(winner: Piece.Color)
-        case draw
+        case draw(reason: DrawReason)
         
         var description: String {
             switch self {
@@ -47,19 +63,22 @@ struct Notation {
     
     private(set) var moves: [Move]
     private(set) var state: State
+    private(set) var positions: [String: Int]
     
     var delegate: NotationDelegate?
     
     var halfMoves: Int { moves.count }
     var fullMoves: Int { Int((Double(halfMoves) / 2.0).rounded(.up)) }
     
-    init(moves: [Move] = [], state: State = .play) {
+    init(moves: [Move] = [], state: State = .play, positions: [String: Int] = [:]) {
         self.moves = moves
         self.state = state
+        self.positions = positions
     }
     
-    mutating func update(with move: Move, state: State) {
+    mutating func update(with move: Move, state: State, position: String) {
         moves.append(move)
+        positions[position, default: 0] += 1
         self.state = state
         delegate?.notation(self, didAddMove: move, state: state)
     }

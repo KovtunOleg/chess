@@ -26,6 +26,8 @@ import SwiftUI
     @State private var promoted: Promoted?
     @State private var checked: Piece?
     @State private var lastMove: Move?
+    @State private var stateAlert: StateAlert?
+    
     private static let boardCoordinateSpace = "board"
     
     init(_ game: Game) {
@@ -58,6 +60,13 @@ import SwiftUI
             .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
         }
         .padding()
+        .alert(item: $stateAlert) { alert in
+            Alert(
+                title: alert.title,
+                message: alert.message,
+                dismissButton: .default(Text("OK"))
+            )
+        }
         .onAppear {
             do {
                 game = try FENParser.parse(fen: FENParser.startPosition, delegate: self)
@@ -262,8 +271,14 @@ extension ChessboardView: NotationDelegate {
         Task { @MainActor in
             switch state {
             case .check, .mate:
+                if case let .mate(winner) = state {
+                    stateAlert = .mate(winner)
+                }
                 checked = game.board.pieces.first(where: { $0.color == game.turn && $0.type == .king })
             default:
+                if case let .draw(reason) = state {
+                    stateAlert = .draw(reason)
+                }
                 checked = nil
             }
             switch move {
