@@ -8,8 +8,12 @@
 import SwiftUI
 
 extension View {
-    public func onHover<Content: View>(@ViewBuilder _ modify: @escaping (Self) -> Content) -> some View {
+    func onHover<Content: View>(@ViewBuilder _ modify: @escaping (Self) -> Content) -> some View {
         modifier(HoverModifier { modify(self) })
+    }
+    
+    func sizeReader(size: Binding<CGSize>) -> some View {
+        modifier(SizeReader(size: size))
     }
 }
 
@@ -21,6 +25,17 @@ private struct HoverModifier<Result: View>: ViewModifier {
         (isHovering ? AnyView(modifier()) : AnyView(content))
             .onHover {
                 isHovering = $0
+            }
+    }
+}
+
+struct SizeReader: ViewModifier {
+    @Binding var size: CGSize
+
+    func body(content: Content) -> some View {
+        content
+            .onGeometryChange(for: CGSize.self, of: \.size) {
+                size = $0
             }
     }
 }

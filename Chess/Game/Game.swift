@@ -9,7 +9,11 @@ import SwiftUI
 import Observation
 
 @Observable
-final class Game {
+final class Game: Equatable, Identifiable {
+    static func == (lhs: Game, rhs: Game) -> Bool {
+        lhs.id == rhs.id
+    }
+    
     static let size = 8
     private(set) var board: [[Square]]
     private(set) var notation: Notation
@@ -22,7 +26,6 @@ final class Game {
         game.board = board.copy
         game.notation = notation
         game.notation.delegate = nil
-        
         return game
     }
     
@@ -69,7 +72,7 @@ final class Game {
                 destinationPiece = square(at: rookPosition).piece?.copy
                 square(at: Position(rank: source.rank, file: source.file > destination.position.file ? source.file - 1 : source.file + 1)).piece = destinationPiece
                 square(at: rookPosition).piece = nil
-                move = .castle(king: sourcePiece, rook: destinationPiece!, short: abs(source.file - rookPosition.file) == 3)
+                move = .castle(king: sourcePiece, rook: destinationPiece!, short: abs(source.file - rookPosition.file) == 2)
             default:
                 break
             }
@@ -145,6 +148,10 @@ final class Game {
             legalMoves.append(move)
         }
         return legalMoves
+    }
+    
+    func setNotationDelegate(_ delegate: NotationDelegate) {
+        notation.delegate = delegate
     }
 }
 

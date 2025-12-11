@@ -11,7 +11,7 @@ import SwiftUI
     private typealias Move = (from: Position, to: Position)
     private typealias Promoted = (piece: Piece, position: Position)
     
-    @State private var game: Game
+    @Binding private(set) var game: Game
     @State private var moves: [Position]?
     @State private var selected: Piece? {
         didSet {
@@ -29,10 +29,6 @@ import SwiftUI
     @State private var stateAlert: StateAlert?
     
     private static let boardCoordinateSpace = "board"
-    @State private var sss: String = "asd"
-    init(_ game: Game) {
-        self.game = game
-    }
     
     var body: some View {
         GeometryReader { geometry in
@@ -66,24 +62,8 @@ import SwiftUI
                     stateAlert = nil
                 }
         }
-        .onAppear {
-            do {
-                game = try FENParser.parse(fen: FENParser.startPosition, delegate: self)
-                game.onPromote = { pawn, position in
-                    Task {
-                        promoted = (pawn, position)
-                        while promoted?.piece.type == .pawn {
-                            try? await Task.sleep(for: .milliseconds(1))
-                        }
-                        let copy = promoted?.piece.copy
-                        promoted = nil
-                        return copy ?? pawn
-                    }
-                }
-            } catch {
-                guard error is FENParser.ParsingError else { print("Unknown error"); return }
-                print("Invalid FEN format")
-            }
+        .onChange(of: game) { _, _ in
+            reset()
         }
     }
     
@@ -316,13 +296,30 @@ extension ChessboardView {
         guard position.isValid else { return nil }
         return game.square(at: position)
     }
+    
+    private func reset() {
+        game.setNotationDelegate(self)
+        game.onPromote = { pawn, position in
+            Task {
+                promoted = (pawn, position)
+                while promoted?.piece.type == .pawn {
+                    try? await Task.sleep(for: .milliseconds(1))
+                }
+                let copy = promoted?.piece.copy
+                promoted = nil
+                return copy ?? pawn
+            }
+        }
+        moves = nil
+        selected = nil
+        promoted = nil
+        lastMove = nil
+    }
 }
 
-struct ChessboardView_Previews: PreviewProvider {
-    static var previews: some View {
-        Group {
-            ChessboardView(Game())
-                .previewLayout(.sizeThatFits)
-        }
+#Preview(traits: .sizeThatFitsLayout) {
+    @Previewable @State var game = Game()
+    Group {
+        ChessboardView(game: $game)
     }
 }

@@ -12,7 +12,7 @@ final class FENParser {
     }
     static let startPosition = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
     
-    static func parse(fen: String, delegate: NotationDelegate? = nil) throws -> Game {
+    static func parse(fen: String) throws -> Game {
         let fenParts = fen.split(separator: " ")
         guard fenParts.count == 6 else { throw ParsingError.invalidFENFormat }
         
@@ -61,8 +61,7 @@ final class FENParser {
         // 5. Halfmove Clock
         let halfmoves = Int(fenParts[4]) ?? 0
         let moves = [Notation.Move](repeating: .unknown, count: halfmoves - enPassantMoves.count)
-        var notation = Notation(moves: moves + enPassantMoves)
-        notation.delegate = delegate
+        let notation = Notation(moves: moves + enPassantMoves)
         
         // 6. Fullmove Number (not used)
         _ = Int(fenParts[5]) ?? 0

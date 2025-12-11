@@ -20,7 +20,7 @@ enum StateAlert: Identifiable {
 }
 
 struct StateAlertView: View {
-    var state : StateAlert
+    private(set) var state : StateAlert
     var body: some View {
         VStack {
             Text({
