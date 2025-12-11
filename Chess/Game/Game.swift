@@ -13,12 +13,14 @@ final class Game {
     static let size = 8
     private(set) var board: [[Square]]
     private(set) var notation: Notation
-    private(set) var turn: Piece.Color
+    
+    var turn: Piece.Color {
+        notation.halfMoves % 2 == 0 ? .white : .black
+    }
     private var copy: Game {
         let game = Game()
         game.board = board.copy
         game.notation = notation
-        game.turn = turn
         game.notation.delegate = nil
         
         return game
@@ -26,9 +28,8 @@ final class Game {
     
     var onPromote: ((Piece, Position) -> Task<Piece, Never>)? // default to queen
     
-    init(board: [[Square]] = [[Square]].empty, notation: Notation = Notation(), turn: Piece.Color = .white) {
+    init(board: [[Square]] = [[Square]].empty, notation: Notation = Notation()) {
         self.board = board
-        self.turn = turn
         self.notation = notation
     }
     
@@ -176,6 +177,7 @@ extension Game {
         guard notation.positions[position, default: 0] < 2 else { return .threefoldRepetition }
         guard isSufficientMaterial(pieces.filter { $0.color == color }) ||
                 isSufficientMaterial(pieces.filter { $0.color != color }) else { return .insufficientMaterial }
+        guard notation.fullMoves - notation.lastActiveMoveIndex < 50 else { return .fiftyMoveRule }
         return nil
     }
     
@@ -205,10 +207,6 @@ extension Game {
             guard let drawReason = isDraw(isCheck: false, hasMoves: hasMoves, position: position, color: opponentColor) else { return .play }
             return .draw(reason: drawReason)
         }()
-        switch state {
-        case .play, .check: turn.toggle()
-        default: break
-        }
         notation.update(with: move, state: state, position: position)
     }
 }

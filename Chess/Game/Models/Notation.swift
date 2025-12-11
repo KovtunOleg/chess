@@ -21,8 +21,8 @@ struct Notation {
                 let capturedDescription = captured != nil ? "x" : ""
                 let promotedDescription = promoted != nil ? "=\(promoted!.type.description)" : ""
                 return "\(piece.description)\(capturedDescription)\(position.description)\(promotedDescription)"
-            case let .castle(king, _, short):
-                return "\(king.description) \(short ? "O-O" : "O-O-O")"
+            case let .castle(_, _, short):
+                return "\(short ? "O-O" : "O-O-O")"
             default:
                 return ""
             }
@@ -31,17 +31,17 @@ struct Notation {
     
     enum State: Hashable, CustomStringConvertible {
         enum DrawReason: Hashable, CustomStringConvertible {
+            case stalemate
             case threefoldRepetition
             case insufficientMaterial
             case fiftyMoveRule
-            case stalemate
             
             var description: String {
                 switch self {
+                case .stalemate: "Stalemate"
                 case .threefoldRepetition: "Threefold repetition"
                 case .fiftyMoveRule: "Fifty move rule"
                 case .insufficientMaterial: "Insufficient material"
-                case .stalemate: "Stalemate"
                 }
             }
         }
@@ -62,24 +62,36 @@ struct Notation {
     }
     
     private(set) var moves: [Move]
-    private(set) var state: State
+    private(set) var states: [State]
     private(set) var positions: [String: Int]
     
     var delegate: NotationDelegate?
     
     var halfMoves: Int { moves.count }
     var fullMoves: Int { Int((Double(halfMoves) / 2.0).rounded(.up)) }
+    var state: State { states.last ?? .play }
+    var lastActiveMoveIndex: Int {
+        let index = moves.lastIndex { move in
+            switch move {
+            case let .move(piece, _, captured, _):
+                return piece.type == .pawn || captured != nil
+            case .castle: return false
+            case .unknown: return true
+            }
+        } ?? 0
+        return Int((Double(index) / 2.0).rounded(.up))
+    }
     
-    init(moves: [Move] = [], state: State = .play, positions: [String: Int] = [:]) {
+    init(moves: [Move] = [], states: [State] = [], positions: [String: Int] = [:]) {
         self.moves = moves
-        self.state = state
+        self.states = states
         self.positions = positions
     }
     
     mutating func update(with move: Move, state: State, position: String) {
         moves.append(move)
+        states.append(state)
         positions[position, default: 0] += 1
-        self.state = state
         delegate?.notation(self, didAddMove: move, state: state)
     }
 }

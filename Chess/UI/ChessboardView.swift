@@ -29,7 +29,7 @@ import SwiftUI
     @State private var stateAlert: StateAlert?
     
     private static let boardCoordinateSpace = "board"
-    
+    @State private var sss: String = "asd"
     init(_ game: Game) {
         self.game = game
     }
@@ -60,12 +60,11 @@ import SwiftUI
             .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
         }
         .padding()
-        .alert(item: $stateAlert) { alert in
-            Alert(
-                title: alert.title,
-                message: alert.message,
-                dismissButton: .default(Text("OK"))
-            )
+        .sheet(item: $stateAlert) { item in
+            StateAlertView(state: item)
+                .onTapGesture {
+                    stateAlert = nil
+                }
         }
         .onAppear {
             do {
@@ -239,7 +238,11 @@ import SwiftUI
     private func promoteView(size: CGFloat) -> some View {
         if let piece = promoted?.piece, let position = promoted?.position {
             let types: [Piece.`Type`] = [.queen, .rook, .bishop, .knight]
-            let pieces = types.map { Piece(color: game.turn, type: $0) }
+            let pieces = {
+                var pieces = types.map { Piece(color: game.turn, type: $0) }
+                if (piece.color == .black) { pieces.reverse() }
+                return pieces
+            }()
             let center = CGPoint(x: getPoint(for: game.square(at: position), size: size).x,
                                  y: (piece.color == .white ? 0 : size * CGFloat(pieces.count)) + size * CGFloat(pieces.count) / 2)
             VStack(spacing: 0) {
@@ -261,6 +264,11 @@ import SwiftUI
             }
             .background(.white)
             .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .inset(by: -2)
+                    .stroke(.black.opacity(0.5), lineWidth: 4)
+            )
             .position(center)
         }
     }
@@ -295,7 +303,7 @@ extension ChessboardView: NotationDelegate {
 
 extension ChessboardView {
     private func canSelect(_ piece: Piece) -> Bool {
-        promoted == nil && piece.color == game.turn
+        promoted == nil && piece.color == game.turn && (game.notation.state == .check || game.notation.state == .play)
     }
     
     private func getPoint(for square: Square, size: CGFloat) -> CGPoint {

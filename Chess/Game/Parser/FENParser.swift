@@ -27,8 +27,8 @@ final class FENParser {
             }
         }
         
-        // 2. Active Color
-        let turn: Piece.Color = fenParts[1] == "b" ? .black : .white
+        // 2. Active Color (not used)
+        _ = fenParts[1] == "b" ? Piece.Color.black : .white
         
         // 3. Castling Rights
         let castlingRights = fenParts[2]
@@ -67,7 +67,7 @@ final class FENParser {
         // 6. Fullmove Number (not used)
         _ = Int(fenParts[5]) ?? 0
         
-        return Game(board: board, notation: notation, turn: turn)
+        return Game(board: board, notation: notation)
     }
     
     static func parse(game: Game) -> String {
