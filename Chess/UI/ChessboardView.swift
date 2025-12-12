@@ -5,9 +5,11 @@
 //  Created by Oleg Kovtun on 09.12.2025.
 //
 
+import Combine
 import SwiftUI
 
-@MainActor struct ChessboardView: View {
+@MainActor
+struct ChessboardView: View {
     private typealias Move = (from: Position, to: Position)
     private typealias Promoted = (piece: Piece, position: Position)
     
@@ -27,6 +29,7 @@ import SwiftUI
     @State private var checked: Piece?
     @State private var lastMove: Move?
     @State private var stateAlert: StateAlert?
+    @State private var notationCancellable: AnyCancellable?
     
     private static let boardCoordinateSpace = "board"
     
@@ -254,33 +257,6 @@ import SwiftUI
     }
 }
 
-extension ChessboardView: NotationDelegate {
-    func notation(_ notation: Notation, didAddMove move: Notation.Move, state: Notation.State) {
-        Task { @MainActor in
-            switch state {
-            case .check, .mate:
-                if case let .mate(winner) = state {
-                    stateAlert = .mate(winner)
-                }
-                checked = game.board.pieces.first(where: { $0.color == game.turn && $0.type == .king })
-            default:
-                if case let .draw(reason) = state {
-                    stateAlert = .draw(reason)
-                }
-                checked = nil
-            }
-            switch move {
-            case let .move(piece: piece, to: position, captured: _, promoted: _):
-                lastMove = (from: piece.position!, to: position)
-            case let .castle(king: king, rook: _, short: short):
-                lastMove = (from: king.position!, to: Position(rank: king.position!.rank, file: short ? 3 : 5))
-            case .unknown:
-                lastMove = nil
-            }
-        }
-    }
-}
-
 extension ChessboardView {
     private func canSelect(_ piece: Piece) -> Bool {
         promoted == nil && piece.color == game.turn && (game.notation.state == .check || game.notation.state == .play)
@@ -298,7 +274,6 @@ extension ChessboardView {
     }
     
     private func reset() {
-        game.setNotationDelegate(self)
         game.onPromote = { pawn, position in
             Task {
                 promoted = (pawn, position)
@@ -310,10 +285,37 @@ extension ChessboardView {
                 return copy ?? pawn
             }
         }
+        notationCancellable = game.notationPublisher
+            .sink { notation in
+                update(notation)
+            }
         moves = nil
         selected = nil
         promoted = nil
         lastMove = nil
+    }
+    
+    private func update(_ notation: Notation) {
+        switch notation.state {
+        case .check, .mate:
+            if case let .mate(winner) = notation.state {
+                stateAlert = .mate(winner)
+            }
+            checked = game.board.pieces.first(where: { $0.color == game.turn && $0.type == .king })
+        default:
+            if case let .draw(reason) = notation.state {
+                stateAlert = .draw(reason)
+            }
+            checked = nil
+        }
+        switch notation.move {
+        case let .move(piece: piece, to: position, captured: _, promoted: _):
+            lastMove = (from: piece.position!, to: position)
+        case let .castle(king: king, rook: _, short: short):
+            lastMove = (from: king.position!, to: Position(rank: king.position!.rank, file: short ? 6 : 2))
+        case .unknown:
+            lastMove = nil
+        }
     }
 }
 

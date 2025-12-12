@@ -5,8 +5,9 @@
 //  Created by Oleg Kovtun on 01.12.2025.
 //
 
-import SwiftUI
+import Combine
 import Observation
+import SwiftUI
 
 @Observable
 final class Game: Equatable, Identifiable {
@@ -17,6 +18,7 @@ final class Game: Equatable, Identifiable {
     static let size = 8
     private(set) var board: [[Square]]
     private(set) var notation: Notation
+    private(set) var notationPublisher = PassthroughSubject<Notation, Never>()
     
     var turn: Piece.Color {
         notation.halfMoves % 2 == 0 ? .white : .black
@@ -25,7 +27,6 @@ final class Game: Equatable, Identifiable {
         let game = Game()
         game.board = board.copy
         game.notation = notation
-        game.notation.delegate = nil
         return game
     }
     
@@ -72,7 +73,7 @@ final class Game: Equatable, Identifiable {
                 destinationPiece = square(at: rookPosition).piece?.copy
                 square(at: Position(rank: source.rank, file: source.file > destination.position.file ? source.file - 1 : source.file + 1)).piece = destinationPiece
                 square(at: rookPosition).piece = nil
-                move = .castle(king: sourcePiece, rook: destinationPiece!, short: abs(source.file - rookPosition.file) == 2)
+                move = .castle(king: sourcePiece, rook: destinationPiece!, short: abs(source.file - rookPosition.file) == 3)
             default:
                 break
             }
@@ -136,7 +137,7 @@ final class Game: Equatable, Identifiable {
                 var count = 0
                 while position != rookPosition, count < 2 {
                     position = Position(rank: position.rank, file: position.file + direction)
-                    guard square(at: position).piece == nil, await isLegalMove(piece, to: position, testCheck: testCheck) else { continue outer }
+                    guard position.isValid, square(at: position).piece == nil, await isLegalMove(piece, to: position, testCheck: testCheck) else { continue outer }
                     count += 1
                 }
                 moves.append(position)
@@ -148,10 +149,6 @@ final class Game: Equatable, Identifiable {
             legalMoves.append(move)
         }
         return legalMoves
-    }
-    
-    func setNotationDelegate(_ delegate: NotationDelegate) {
-        notation.delegate = delegate
     }
 }
 
@@ -178,10 +175,10 @@ extension Game {
         func isSufficientMaterial(_ pieces: [Piece]) -> Bool {
             let set = pieces.map { $0.type == .bishop ? "\($0.position?.isLight == true ? "l" : "d")" : $0.description } // include case for same color bishops
             guard set.count < 3 else { return true }
-            return !pieces.contains(where: { $0.type == .bishop || $0.type == .knight })
+            return set.count == 1 ? false : !pieces.contains(where: { $0.type == .bishop || $0.type == .knight })
         }
         guard hasMoves else { return .stalemate }
-        guard notation.positions[position, default: 0] < 2 else { return .threefoldRepetition }
+        guard notation.positionsCount[position, default: 0] < 2 else { return .threefoldRepetition }
         guard isSufficientMaterial(pieces.filter { $0.color == color }) ||
                 isSufficientMaterial(pieces.filter { $0.color != color }) else { return .insufficientMaterial }
         guard notation.fullMoves - notation.lastActiveMoveIndex < 50 else { return .fiftyMoveRule }
@@ -215,5 +212,6 @@ extension Game {
             return .draw(reason: drawReason)
         }()
         notation.update(with: move, state: state, position: position)
+        notationPublisher.send(notation)
     }
 }

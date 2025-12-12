@@ -5,12 +5,8 @@
 //  Created by Oleg Kovtun on 04.12.2025.
 //
 
-protocol NotationDelegate {
-    func notation(_ notation: Notation, didAddMove move: Notation.Move, state: Notation.State)
-}
-
 struct Notation {
-    enum Move: CustomStringConvertible {
+    enum Move: Hashable, CustomStringConvertible {
         case unknown // used for FEN format
         case move(piece: Piece, to: Position, captured: Piece? = nil, promoted: Piece? = nil)
         case castle(king: Piece, rook: Piece, short: Bool)
@@ -55,7 +51,7 @@ struct Notation {
             switch self {
             case .check: return "+"
             case let .mate(winner): return "# \(winner == .white ? "1-0" : "0-1")"
-            case .draw: return " 1/2 - 1/2"
+            case .draw: return " 1/2-1/2"
             default: return ""
             }
         }
@@ -63,13 +59,13 @@ struct Notation {
     
     private(set) var moves: [Move]
     private(set) var states: [State]
-    private(set) var positions: [String: Int]
-    
-    var delegate: NotationDelegate?
+    private(set) var positionsCount: [String: Int]
+    private(set) var positions: [String]
     
     var halfMoves: Int { moves.count }
     var fullMoves: Int { Int((Double(halfMoves) / 2.0).rounded(.up)) }
     var state: State { states.last ?? .play }
+    var move: Move { moves.last ?? .unknown }
     var lastActiveMoveIndex: Int {
         let index = moves.lastIndex { move in
             switch move {
@@ -82,16 +78,17 @@ struct Notation {
         return Int((Double(index) / 2.0).rounded(.up))
     }
     
-    init(moves: [Move] = [], states: [State] = [], positions: [String: Int] = [:]) {
+    init(moves: [Move] = [], states: [State] = [], positions: [String] = []) {
         self.moves = moves
         self.states = states
         self.positions = positions
+        self.positionsCount = positions.reduce(into: [:]) { $0[$1, default: 0] += 1 }
     }
     
     mutating func update(with move: Move, state: State, position: String) {
         moves.append(move)
         states.append(state)
-        positions[position, default: 0] += 1
-        delegate?.notation(self, didAddMove: move, state: state)
+        positions.append(position)
+        positionsCount[position, default: 0] += 1
     }
 }
