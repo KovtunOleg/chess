@@ -55,8 +55,7 @@ extension Array where Element == [Square] {
         let copy = [[Square]].empty
         for piece in pieces {
             guard let position = piece.position else { continue }
-            let square = copy[position.rank][position.file]
-            square.piece = piece.copy
+            copy[position.rank][position.file].piece = piece.copy
         }
         return copy
     }

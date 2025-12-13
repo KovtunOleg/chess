@@ -12,15 +12,17 @@ import SwiftUI
 @MainActor
 struct RightPannelView: View {
     @Binding private(set) var game: Game
+    @Environment(\.gameSettings) var gameSettings
     @State private var moves = [Notation.Move]()
-    @State private var state = Notation.State.play
+    @State private var state = Notation.State.idle
     @State private var notationCancellable: AnyCancellable?
     
     var body: some View {
         VStack {
             buttonsView()
-            Spacer()
+            gameSettingsView()
             notationView()
+            Spacer()
         }
         .background(.gray.opacity(0.1))
         .padding(EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4))
@@ -38,6 +40,28 @@ extension RightPannelView {
                 .padding(4)
         }
         .padding()
+    }
+    
+    @ViewBuilder
+    private func gameSettingsView() -> some View {
+        @Bindable var gameSettings = gameSettings
+        VStack(alignment: .leading, spacing: 0) {
+            CustomPicker(selection: $gameSettings.gameType, segments: GameSettings.GameType.allCases) { type in
+                Text(type.description)
+                    .frame(maxWidth: .infinity, minHeight: 40)
+                    .font(Font.title2.bold())
+            }
+            .padding(4)
+            if case .playerVsComputer = gameSettings.gameType {
+                CustomPicker(selection: $gameSettings.playerColor, segments: Piece.Color.allCases) { color in
+                    Image(Piece(color: color, type: .king).image)
+                        .resizable()
+                        .scaledToFit()
+                }
+                .padding(4)
+            }
+        }
+        .disabled(!state.isEnded)
     }
     
     @ViewBuilder
@@ -60,6 +84,7 @@ extension RightPannelView {
                 Spacer()
             }
         }
+        .defaultScrollAnchor(.bottom, for: .sizeChanges)
         .padding(EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4))
     }
 }
@@ -67,6 +92,8 @@ extension RightPannelView {
 extension RightPannelView {
     private func reset() {
         do {
+            moves.removeAll()
+            state = .idle
             game = try FENParser.parse(fen: FENParser.startPosition)
             notationCancellable = game.notationPublisher
                 .sink { notation in

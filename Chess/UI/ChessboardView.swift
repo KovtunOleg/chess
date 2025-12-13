@@ -14,12 +14,16 @@ struct ChessboardView: View {
     private typealias Promoted = (piece: Piece, position: Position)
     
     @Binding private(set) var game: Game
+    @Environment(\.gameSettings) var gameSettings
     @State private var moves: [Position]?
     @State private var selected: Piece? {
         didSet {
+            guard let selected else {
+                moves = nil
+                return
+            }
             Task {
                 moves = await {
-                    guard let selected else { return nil }
                     return await game.moves(for: selected)
                 }()
             }
@@ -29,6 +33,7 @@ struct ChessboardView: View {
     @State private var checked: Piece?
     @State private var lastMove: Move?
     @State private var stateAlert: StateAlert?
+    @State private var cpu = CPU()
     @State private var notationCancellable: AnyCancellable?
     
     private static let boardCoordinateSpace = "board"
@@ -108,12 +113,8 @@ struct ChessboardView: View {
                                     selected?.dragPosition = gesture.location
                                 }
                                 .onEnded { gesture in
-                                    Task {
-                                        guard selected != nil else { return }
-                                        selected = nil
-                                        guard let destination = getSquare(at: gesture.location, size: size) else { return }
-                                        await game.move(piece, to: destination)
-                                    }
+                                    guard let destination = getSquare(at: gesture.location, size: size) else { return }
+                                    playerMove(piece, to: destination)
                                 },
                             TapGesture()
                                 .onEnded {
@@ -142,12 +143,8 @@ struct ChessboardView: View {
                                 selected?.dragPosition = gesture.location
                             }
                             .onEnded { gesture in
-                                Task {
-                                    guard selected != nil else { return }
-                                    selected = nil
-                                    guard let destination = getSquare(at: gesture.location, size: size) else { return }
-                                    await game.move(piece, to: destination)
-                                }
+                                guard let destination = getSquare(at: gesture.location, size: size) else { return }
+                                playerMove(piece, to: destination)
                             },
                         TapGesture()
                             .onEnded {
@@ -176,11 +173,8 @@ struct ChessboardView: View {
                                 .frame(width: size / 2, height: size / 2)
                         }
                         .onTapGesture {
-                            Task {
-                                guard let piece = selected else { return }
-                                selected = nil
-                                await game.move(piece, to: square)
-                            }
+                            guard let piece = selected else { return }
+                            playerMove(piece, to: square)
                         }
                     }
                     .position(center)
@@ -258,8 +252,37 @@ struct ChessboardView: View {
 }
 
 extension ChessboardView {
+    func playerMove(_ piece: Piece, to square: Square) {
+        Task {
+            guard selected != nil else { return }
+            selected = nil
+            await game.move(piece, to: square)
+        }
+    }
+    
+    func cpuMoveIfNeeded() {
+        guard !gameSettings.playerCanMove(game.turn) else { return }
+        Task {
+            let (_, moves) = await cpu.dfs(game: game.copy, depth: 3)
+            var piece: Piece?, square: Square?
+            switch moves.first {
+            case let .move(_piece, position, _, _):
+                piece = _piece
+                square = game.square(at: position)
+            case let .castle(king, _, newKingPosition, _, _):
+                piece = king
+                square = game.square(at: newKingPosition)
+            default:
+                break
+            }
+            guard let piece, let square else { return }
+            await game.move(piece, to: square, force: true)
+        }
+    }
+    
     private func canSelect(_ piece: Piece) -> Bool {
-        promoted == nil && piece.color == game.turn && (game.notation.state == .check || game.notation.state == .play)
+        promoted == nil && piece.color == game.turn &&
+        game.notation.state.canMove && gameSettings.playerCanMove(piece.color)
     }
     
     private func getPoint(for square: Square, size: CGFloat) -> CGPoint {
@@ -276,6 +299,7 @@ extension ChessboardView {
     private func reset() {
         game.onPromote = { pawn, position in
             Task {
+                guard gameSettings.playerCanMove(pawn.color) else { return Piece(color: pawn.color, type: .queen) } // for CPU default to queen
                 promoted = (pawn, position)
                 while promoted?.piece.type == .pawn {
                     try? await Task.sleep(for: .milliseconds(1))
@@ -288,11 +312,13 @@ extension ChessboardView {
         notationCancellable = game.notationPublisher
             .sink { notation in
                 update(notation)
+                cpuMoveIfNeeded()
             }
-        moves = nil
         selected = nil
         promoted = nil
+        checked = nil
         lastMove = nil
+        cpuMoveIfNeeded()
     }
     
     private func update(_ notation: Notation) {
@@ -309,10 +335,10 @@ extension ChessboardView {
             checked = nil
         }
         switch notation.move {
-        case let .move(piece: piece, to: position, captured: _, promoted: _):
+        case let .move(piece, position, _, _):
             lastMove = (from: piece.position!, to: position)
-        case let .castle(king: king, rook: _, short: short):
-            lastMove = (from: king.position!, to: Position(rank: king.position!.rank, file: short ? 6 : 2))
+        case let .castle(king, _, newKingPosition, _, _):
+            lastMove = (from: king.position!, to: newKingPosition)
         case .unknown:
             lastMove = nil
         }

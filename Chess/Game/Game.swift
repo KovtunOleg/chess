@@ -16,20 +16,16 @@ final class Game: Equatable, Identifiable {
     }
     
     static let size = 8
+    static let squaresCount = Game.size * Game.size - 1
     private(set) var board: [[Square]]
     private(set) var notation: Notation
     private(set) var notationPublisher = PassthroughSubject<Notation, Never>()
     
-    var turn: Piece.Color {
-        notation.halfMoves % 2 == 0 ? .white : .black
-    }
-    private var copy: Game {
-        let game = Game()
-        game.board = board.copy
-        game.notation = notation
-        return game
+    var copy: Game {
+        Game(board: board.copy, notation: notation)
     }
     
+    var turn: Piece.Color { notation.halfMoves % 2 == 0 ? .white : .black }
     var onPromote: ((Piece, Position) -> Task<Piece, Never>)? // default to queen
     
     init(board: [[Square]] = [[Square]].empty, notation: Notation = Notation()) {
@@ -38,10 +34,10 @@ final class Game: Equatable, Identifiable {
     }
     
     @discardableResult
-    func move(_ piece: Piece, to destination: Square, force: Bool = false) async -> Bool {
+    func move(_ piece: Piece, to destination: Square, force: Bool = false, needToUpdateNotation: Bool = true) async -> Notation.Move? {
         if !force {
             let moves = await moves(for: piece)
-            guard moves.contains(destination.position) else { return false }
+            guard moves.contains(destination.position) else { return nil }
         }
         var sourcePiece: Piece
         var destinationPiece: Piece?
@@ -70,20 +66,54 @@ final class Game: Equatable, Identifiable {
                 guard destinationPiece == nil, destination.position.rank == source.rank, abs(source.file - destination.position.file) > 1 else { break }
                 let rookPosition = Position(rank: source.rank, file: source.file > destination.position.file ? 0 : Game.size - 1)
                 destinationPiece?.movesCount = piece.movesCount
-                destinationPiece = square(at: rookPosition).piece?.copy
-                square(at: Position(rank: source.rank, file: source.file > destination.position.file ? source.file - 1 : source.file + 1)).piece = destinationPiece
+                destinationPiece = square(at: rookPosition).piece
+                let newRookPosition = Position(rank: source.rank, file: source.file > destination.position.file ? source.file - 1 : source.file + 1)
+                move = .castle(king: sourcePiece, rook: destinationPiece!.copy, kingTo: destination.position, rookTo: newRookPosition, short: abs(source.file - rookPosition.file) == 3)
+                square(at: newRookPosition).piece = destinationPiece?.copy
                 square(at: rookPosition).piece = nil
-                move = .castle(king: sourcePiece, rook: destinationPiece!, short: abs(source.file - rookPosition.file) == 3)
             default:
                 break
             }
             square(at: source).piece = nil
         }
         square(at: destination.position).piece = promotionPiece ?? piece
-        if !force {
+        if needToUpdateNotation {
             await updateNotation(with: move)
         }
-        return true
+        return move
+    }
+    
+    func undo() -> Piece? {
+        var undoPiece: Piece?
+        switch notation.undo() {
+        case let .move(piece, position, captured, promoted):
+            square(at: position).piece = nil
+            guard let piecePosition = piece.position else { break }
+            piece.movesCount -= 1
+            square(at: piecePosition).piece = piece
+            if let promotedPosition = promoted?.position {
+                promoted?.movesCount -= 1
+                square(at: promotedPosition).piece = nil
+            }
+            if let capturedPosition = captured?.position {
+                captured?.movesCount -= 1
+                square(at: capturedPosition).piece = captured
+            }
+            undoPiece = piece
+        case let .castle(king, rook, toKingPosition, toRookPosition, _):
+            guard let kingPosition = king.position, let rookPosition = rook.position else { break }
+            king.movesCount = 0
+            rook.movesCount = 0
+            square(at: kingPosition).piece = king
+            square(at: rookPosition).piece = rook
+            square(at: toKingPosition).piece = nil
+            square(at: toRookPosition).piece = nil
+            undoPiece = king
+        default:
+            break
+        }
+        notationPublisher.send(notation)
+        return undoPiece
     }
     
     func square(at position: Position) -> Square {
@@ -91,7 +121,7 @@ final class Game: Equatable, Identifiable {
     }
     
     func moves(for piece: Piece, testCheck: Bool = true) async -> [Position] {
-        guard let position = piece.position, notation.state == .play || notation.state == .check else { return [] }
+        guard let position = piece.position, notation.state.canMove else { return [] }
         var moves = [Position]()
         for direction in piece.directions {
             var count = 0
@@ -110,7 +140,7 @@ final class Game: Equatable, Identifiable {
         switch piece.type {
         case .pawn:
             // enPassant
-            if case let .move(piece: pawn, to: pawnPosition, _, _) = notation.moves.last, let prevPawnPosition = pawn.position,
+            if case let .move(pawn, pawnPosition, _, _) = notation.moves.last, let prevPawnPosition = pawn.position,
                pawn.type == .pawn, pawn.movesCount == 1, abs(prevPawnPosition.rank - pawnPosition.rank) == 2 {
                 for file in [-1, 1] {
                     guard position.rank == pawnPosition.rank, (position.file - pawnPosition.file) == file else { continue }
@@ -198,7 +228,7 @@ extension Game {
     private func isLegalMove(_ piece: Piece, to position: Position, testCheck: Bool) async -> Bool {
         guard testCheck, let sourcePosition = piece.position else { return true }
         let copy = copy
-        await copy.move(copy.square(at: sourcePosition).piece!, to: copy.square(at: position), force: true)
+        await copy.move(copy.square(at: sourcePosition).piece!, to: copy.square(at: position), force: true, needToUpdateNotation: false)
         return !(await copy.isCheck(color: piece.color))
     }
     

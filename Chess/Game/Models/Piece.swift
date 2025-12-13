@@ -16,6 +16,19 @@ class Piece {
     var movesCount: Int
     var position: Position?
     
+    var value: Int {
+        guard let position else { return 0 }
+        let index = position.rank * Game.size + position.file
+        switch type {
+        case .king: return 0 + Self.kingExtraWeightsMap[color == .white ? index : Game.squaresCount - index]
+        case .queen: return 900 + Self.queenExtraWeightsMap[color == .white ? index : Game.squaresCount - index]
+        case .rook: return 500 + Self.rookExtraWeightsMap[color == .white ? index : Game.squaresCount - index]
+        case .bishop: return 300 + Self.bishopExtraWeightsMap[color == .white ? index : Game.squaresCount - index]
+        case .knight: return 300 + Self.knightExtraWeightsMap[color == .white ? index : Game.squaresCount - index]
+        case .pawn: return 100 + Self.pawnExtraWeightsMap[color == .white ? index : Game.squaresCount - index]
+        }
+    }
+    
     var copy: Piece {
         Piece(color: color, type: type, position: position, movesCount: movesCount)
     }
@@ -43,7 +56,7 @@ extension Piece {
             }
         }
     }
-    enum Color: Hashable, CustomStringConvertible {
+    enum Color: Hashable, CaseIterable, CustomStringConvertible {
         case white, black
         
         var description: String {
@@ -120,4 +133,66 @@ extension Piece {
         default: return Game.size - 1
         }
     }
+    
+    private static let pawnExtraWeightsMap = [
+        0,  0,  0,  0,  0,  0,  0,  0,
+        5, 10, 10,-20,-20, 10, 10,  5,
+        5, -5,-10,  0,  0,-10, -5,  5,
+        0,  0,  0, 20, 20,  0,  0,  0,
+        5,  5, 10, 25, 25, 10,  5,  5,
+        10, 10, 20, 30, 30, 20, 10, 10,
+        50, 50, 50, 50, 50, 50, 50, 50,
+        0,  0,  0,  0,  0,  0,  0,  0
+    ]
+    private static let knightExtraWeightsMap = [
+        -50,-40,-30,-30,-30,-30,-40,-50,
+         -40,-20,  0,  5,  5,  0,-20,-40,
+         -30,  5, 10, 15, 15, 10,  5,-30,
+         -30,  0, 15, 20, 20, 15,  0,-30,
+         -30,  5, 15, 20, 20, 15,  5,-30,
+         -30,  0, 10, 15, 15, 10,  0,-30,
+         -40,-20,  0,  0,  0,  0,-20,-40,
+         -50,-40,-30,-30,-30,-30,-40,-50
+    ]
+    
+    private static let bishopExtraWeightsMap = [
+        -20,-10,-10,-10,-10,-10,-10,-20,
+         -10,  5,  0,  0,  0,  0,  5,-10,
+         -10, 10, 10, 10, 10, 10, 10,-10,
+         -10,  0, 10, 10, 10, 10,  0,-10,
+         -10,  5,  5, 10, 10,  5,  5,-10,
+         -10,  0,  5, 10, 10,  5,  0,-10,
+         -10,  0,  0,  0,  0,  0,  0,-10,
+         -20,-10,-10,-10,-10,-10,-10,-20
+    ]
+    private static let rookExtraWeightsMap = [
+        0,  0,  5,  10, 10, 5,  0,  0,
+        -5,  0,  0,  0,  0,  0,  0, -5,
+        -5,  0,  0,  0,  0,  0,  0, -5,
+        -5,  0,  0,  0,  0,  0,  0, -5,
+        -5,  0,  0,  0,  0,  0,  0, -5,
+        -5,  0,  0,  0,  0,  0,  0, -5,
+        5,  10, 10, 10, 10, 10, 10, 5,
+        0,  0,  0,  0,  0,  0,  0,  0,
+    ]
+    private static let queenExtraWeightsMap = [
+        -20,-10,-10, -5, -5,-10,-10,-20,
+         -10,  0,  5,  0,  0,  0,  0,-10,
+         -10,  5,  5,  5,  5,  5,  0,-10,
+         0,  0,  5,  5,  5,  5,  0, -5,
+         -5,  0,  5,  5,  5,  5,  0, -5,
+         -10,  0,  5,  5,  5,  5,  0,-10,
+         -10,  0,  0,  0,  0,  0,  0,-10,
+         -20,-10,-10, -5, -5,-10,-10,-20,
+    ]
+    private static let kingExtraWeightsMap = [
+        20,  30,  10,  0,   0,   10,  30,  20,
+        20,  20,  0,   0,   0,   0,   20,  20,
+        -10, -20, -20, -20, -20, -20, -20, -10,
+        -20, -30, -30, -40, -40, -30, -30, -20,
+        -30, -40, -40, -50, -50, -40, -40, -30,
+        -30, -40, -40, -50, -50, -40, -40, -30,
+        -30, -40, -40, -50, -50, -40, -40, -30,
+        -30, -40, -40, -50, -50, -40, -40, -30,
+    ]
 }
