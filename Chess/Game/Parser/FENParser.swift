@@ -108,7 +108,7 @@ final class FENParser {
         // 4. Possible En Passant Targets
         parts[3] = "-"
         let moves = game.notation.moves
-        if case let .move(piece: pawn, to: pawnPosition, _, _) = moves.last, let prevPawnPosition = pawn.position,
+        if case let .move(pawn, pawnPosition, _, _) = moves.last, let prevPawnPosition = pawn.position,
            pawn.type == .pawn, pawn.movesCount == 1, abs(prevPawnPosition.rank - pawnPosition.rank) == 2 {
             parts[3] = "\(pawnPosition.file.fileString)\((pawnPosition.rank == 3 ? 2 : 5).rankString)"
         }

@@ -16,6 +16,17 @@ class Piece {
     var movesCount: Int
     var position: Position?
     
+    var value: Int {
+        switch type {
+        case .king: return 0
+        case .queen: return 9
+        case .rook: return 5
+        case .bishop: return 3
+        case .knight: return 3
+        case .pawn: return 1
+        }
+    }
+    
     var copy: Piece {
         Piece(color: color, type: type, position: position, movesCount: movesCount)
     }
@@ -43,7 +54,7 @@ extension Piece {
             }
         }
     }
-    enum Color: Hashable, CustomStringConvertible {
+    enum Color: Hashable, CaseIterable, CustomStringConvertible {
         case white, black
         
         var description: String {

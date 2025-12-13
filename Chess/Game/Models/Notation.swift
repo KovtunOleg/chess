@@ -9,7 +9,7 @@ struct Notation {
     enum Move: Hashable, CustomStringConvertible {
         case unknown // used for FEN format
         case move(piece: Piece, to: Position, captured: Piece? = nil, promoted: Piece? = nil)
-        case castle(king: Piece, rook: Piece, short: Bool)
+        case castle(king: Piece, rook: Piece, kingTo: Position, rookTo: Position, short: Bool)
         
         var description: String {
             switch self {
@@ -17,7 +17,7 @@ struct Notation {
                 let capturedDescription = captured != nil ? "x" : ""
                 let promotedDescription = promoted != nil ? "=\(promoted!.type.description)" : ""
                 return "\(piece.description)\(capturedDescription)\(position.description)\(promotedDescription)"
-            case let .castle(_, _, short):
+            case let .castle(_, _, _, _, short):
                 return "\(short ? "O-O" : "O-O-O")"
             default:
                 return ""
@@ -42,10 +42,25 @@ struct Notation {
             }
         }
         
+        case idle // default
         case play
         case check
         case mate(winner: Piece.Color)
         case draw(reason: DrawReason)
+        
+        var canMove: Bool {
+            switch self {
+            case .idle, .play, .check: return true
+            default: return false
+            }
+        }
+        
+        var isEnded: Bool {
+            switch self {
+            case .idle, .mate, .draw: return true
+            default: return false
+            }
+        }
         
         var description: String {
             switch self {
@@ -64,7 +79,7 @@ struct Notation {
     
     var halfMoves: Int { moves.count }
     var fullMoves: Int { Int((Double(halfMoves) / 2.0).rounded(.up)) }
-    var state: State { states.last ?? .play }
+    var state: State { states.last ?? .idle }
     var move: Move { moves.last ?? .unknown }
     var lastActiveMoveIndex: Int {
         let index = moves.lastIndex { move in
@@ -90,5 +105,14 @@ struct Notation {
         states.append(state)
         positions.append(position)
         positionsCount[position, default: 0] += 1
+    }
+    
+    mutating func undo() -> Move? {
+        guard !moves.isEmpty else { return nil }
+        let move = moves.removeLast()
+        states.removeLast()
+        let position = positions.removeLast()
+        positionsCount[position, default: 0] -= 1
+        return move
     }
 }

@@ -26,6 +26,7 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: minBoardSize + minRightPannelSize, minHeight: minBoardSize)
+        .environment(\.gameSettings, GameSettings())
     }
 }
 
