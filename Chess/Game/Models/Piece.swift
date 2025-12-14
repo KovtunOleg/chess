@@ -20,12 +20,12 @@ class Piece {
         guard let position else { return 0 }
         let index = position.rank * Game.size + position.file
         switch type {
-        case .king: return 0 + Self.kingExtraWeightsMap[color == .white ? index : Game.squaresCount - index]
-        case .queen: return 900 + Self.queenExtraWeightsMap[color == .white ? index : Game.squaresCount - index]
-        case .rook: return 500 + Self.rookExtraWeightsMap[color == .white ? index : Game.squaresCount - index]
-        case .bishop: return 300 + Self.bishopExtraWeightsMap[color == .white ? index : Game.squaresCount - index]
-        case .knight: return 300 + Self.knightExtraWeightsMap[color == .white ? index : Game.squaresCount - index]
-        case .pawn: return 100 + Self.pawnExtraWeightsMap[color == .white ? index : Game.squaresCount - index]
+        case .king: return 0 + Self.kingExtraWeightsMap[color == .white ? index : Game.squaresCount - index - 1]
+        case .queen: return 900 + Self.queenExtraWeightsMap[color == .white ? index : Game.squaresCount - index - 1]
+        case .rook: return 500 + Self.rookExtraWeightsMap[color == .white ? index : Game.squaresCount - index - 1]
+        case .bishop: return 300 + Self.bishopExtraWeightsMap[color == .white ? index : Game.squaresCount - index - 1]
+        case .knight: return 300 + Self.knightExtraWeightsMap[color == .white ? index : Game.squaresCount - index - 1]
+        case .pawn: return 100 + Self.pawnExtraWeightsMap[color == .white ? index : Game.squaresCount - index - 1]
         }
     }
     

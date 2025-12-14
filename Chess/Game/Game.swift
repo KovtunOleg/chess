@@ -16,7 +16,7 @@ final class Game: Equatable, Identifiable {
     }
     
     static let size = 8
-    static let squaresCount = Game.size * Game.size - 1
+    static let squaresCount = Game.size * Game.size
     private(set) var board: [[Square]]
     private(set) var notation: Notation
     private(set) var notationPublisher = PassthroughSubject<Notation, Never>()
@@ -89,21 +89,16 @@ final class Game: Equatable, Identifiable {
         case let .move(piece, position, captured, promoted):
             square(at: position).piece = nil
             guard let piecePosition = piece.position else { break }
-            piece.movesCount -= 1
             square(at: piecePosition).piece = piece
             if let promotedPosition = promoted?.position {
-                promoted?.movesCount -= 1
                 square(at: promotedPosition).piece = nil
             }
             if let capturedPosition = captured?.position {
-                captured?.movesCount -= 1
                 square(at: capturedPosition).piece = captured
             }
             undoPiece = piece
         case let .castle(king, rook, toKingPosition, toRookPosition, _):
             guard let kingPosition = king.position, let rookPosition = rook.position else { break }
-            king.movesCount = 0
-            rook.movesCount = 0
             square(at: kingPosition).piece = king
             square(at: rookPosition).piece = rook
             square(at: toKingPosition).piece = nil
@@ -120,7 +115,7 @@ final class Game: Equatable, Identifiable {
         board[position.rank][position.file]
     }
     
-    func moves(for piece: Piece, testCheck: Bool = true) async -> [Position] {
+    func moves(for piece: Piece) async -> [Position] {
         guard let position = piece.position, notation.state.canMove else { return [] }
         var moves = [Position]()
         for direction in piece.directions {
@@ -156,9 +151,7 @@ final class Game: Equatable, Identifiable {
             }
         case .king:
             // castle
-            if testCheck {
-                guard !(await isCheck(color: piece.color)) else { break }
-            }
+            guard notation.state != .check else { break }
             let rooks = board.pieces.filter({ $0.type == .rook && $0.color == piece.color })
             outer: for rook in rooks {
                 guard rook.movesCount == 0, piece.movesCount == 0, let rookPosition = rook.position else { continue }
@@ -167,7 +160,7 @@ final class Game: Equatable, Identifiable {
                 var count = 0
                 while position != rookPosition, count < 2 {
                     position = Position(rank: position.rank, file: position.file + direction)
-                    guard position.isValid, square(at: position).piece == nil, await isLegalMove(piece, to: position, testCheck: testCheck) else { continue outer }
+                    guard position.isValid, square(at: position).piece == nil, await isLegalMove(piece, to: position) else { continue outer }
                     count += 1
                 }
                 moves.append(position)
@@ -175,7 +168,7 @@ final class Game: Equatable, Identifiable {
         default: break
         }
         var legalMoves = [Position]()
-        for move in moves where await isLegalMove(piece, to: move, testCheck: testCheck)  {
+        for move in moves where await isLegalMove(piece, to: move) {
             legalMoves.append(move)
         }
         return legalMoves
@@ -183,15 +176,42 @@ final class Game: Equatable, Identifiable {
 }
 
 extension Game {
-    private func isCheck(color: Piece.Color) async -> Bool {
-        let pieces = board.pieces
-        let enemyPieces = pieces.filter { $0.color != color }
-        guard let king = pieces.first(where: { $0.type == .king && $0.color == color }),
+    private func isCheck(color: Piece.Color) -> Bool {
+        guard let king = board.pieces.first(where: { $0.type == .king && $0.color == color }),
               let position = king.position else { return false }
-        for enemyPiece in enemyPieces {
-            let moves = await moves(for: enemyPiece, testCheck: false)
-            guard !moves.contains(position) else { return true }
+        let opponentColor: Piece.Color = color == .white ? .black : .white
+        func isCheck(type: Piece.`Type`, condition: (Piece, Int) -> Bool) -> Bool {
+            let piece = Piece(color: opponentColor, type: type)
+            let directions = type == .pawn ? (color == .white ? [[1,-1],[1,1]] : [[-1,-1],[-1,1]]) : piece.directions
+            let limit = type == .pawn ? 1 : piece.limit
+            for direction in directions {
+                var count = 0
+                var position = position
+                while count < limit {
+                    position = Position(rank: position.rank + direction[0], file: position.file + direction[1])
+                    guard position.isValid else { break }
+                    if let otherPiece = square(at: position).piece {
+                        guard otherPiece.color == opponentColor,
+                              condition(otherPiece, count) else { break }
+                        return true
+                    }
+                    count += 1
+                }
+            }
+            return false
         }
+        guard !isCheck(type: .rook, condition: { otherPiece, distance in
+            otherPiece.type == .queen || otherPiece.type == .rook || (otherPiece.type == .king && distance == 1)
+        }) else { return true }
+        guard !isCheck(type: .bishop, condition: { otherPiece, distance in
+            otherPiece.type == .queen || otherPiece.type == .bishop || (otherPiece.type == .king && distance == 1)
+        }) else { return true }
+        guard !isCheck(type: .knight, condition: { otherPiece, _ in
+            otherPiece.type == .knight
+        }) else { return true }
+        guard !isCheck(type: .pawn, condition: { otherPiece, _ in
+            otherPiece.type == .pawn
+        }) else { return true }
         return false
     }
     
@@ -218,18 +238,18 @@ extension Game {
     private func hasMoves(color: Piece.Color) async -> Bool {
         let currentPieces = board.pieces.filter { $0.color == color }
         return await {
-            for piece in currentPieces where !(await moves(for: piece, testCheck: true).isEmpty) {
+            for piece in currentPieces where !(await moves(for: piece).isEmpty) {
                 return true
             }
             return false
         }()
     }
     
-    private func isLegalMove(_ piece: Piece, to position: Position, testCheck: Bool) async -> Bool {
-        guard testCheck, let sourcePosition = piece.position else { return true }
+    private func isLegalMove(_ piece: Piece, to position: Position) async -> Bool {
+        guard let sourcePosition = piece.position else { return true }
         let copy = copy
         await copy.move(copy.square(at: sourcePosition).piece!, to: copy.square(at: position), force: true, needToUpdateNotation: false)
-        return !(await copy.isCheck(color: piece.color))
+        return !copy.isCheck(color: piece.color)
     }
     
     private func updateNotation(with move: Notation.Move) async {
@@ -237,7 +257,7 @@ extension Game {
         let position = String(FENParser.parse(game: self).split(separator: " ")[0])
         let state: Notation.State = await {
             let hasMoves = await hasMoves(color: opponentColor)
-            guard !(await isCheck(color: opponentColor)) else { return isMate(isCheck: true, hasMoves: hasMoves) ? .mate(winner: turn) : .check }
+            guard !isCheck(color: opponentColor) else { return isMate(isCheck: true, hasMoves: hasMoves) ? .mate(winner: turn) : .check }
             guard let drawReason = isDraw(isCheck: false, hasMoves: hasMoves, position: position, color: opponentColor) else { return .play }
             return .draw(reason: drawReason)
         }()
