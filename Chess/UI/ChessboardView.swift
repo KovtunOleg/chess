@@ -113,7 +113,10 @@ struct ChessboardView: View {
                                     selected?.dragPosition = gesture.location
                                 }
                                 .onEnded { gesture in
-                                    guard let destination = getSquare(at: gesture.location, size: size) else { return }
+                                    guard let destination = getSquare(at: gesture.location, size: size) else {
+                                        selected = nil
+                                        return
+                                    }
                                     playerMove(piece, to: destination)
                                 },
                             TapGesture()
@@ -143,7 +146,10 @@ struct ChessboardView: View {
                                 selected?.dragPosition = gesture.location
                             }
                             .onEnded { gesture in
-                                guard let destination = getSquare(at: gesture.location, size: size) else { return }
+                                guard let destination = getSquare(at: gesture.location, size: size) else {
+                                    selected = nil
+                                    return
+                                }
                                 playerMove(piece, to: destination)
                             },
                         TapGesture()

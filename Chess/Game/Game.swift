@@ -201,10 +201,10 @@ extension Game {
             return false
         }
         guard !isCheck(type: .rook, condition: { otherPiece, distance in
-            otherPiece.type == .queen || otherPiece.type == .rook || (otherPiece.type == .king && distance == 1)
+            otherPiece.type == .queen || otherPiece.type == .rook || (otherPiece.type == .king && distance == 0)
         }) else { return true }
         guard !isCheck(type: .bishop, condition: { otherPiece, distance in
-            otherPiece.type == .queen || otherPiece.type == .bishop || (otherPiece.type == .king && distance == 1)
+            otherPiece.type == .queen || otherPiece.type == .bishop || (otherPiece.type == .king && distance == 0)
         }) else { return true }
         guard !isCheck(type: .knight, condition: { otherPiece, _ in
             otherPiece.type == .knight

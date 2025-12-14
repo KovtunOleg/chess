@@ -17,43 +17,38 @@ final class CPU {
             default: guard depth > 0 else { return (evaluate(game: game), moves) }
             }
             var alpha = alpha, beta = beta
-            let pieces = game.board.pieces
             var bestScore: Int, bestMoves = [Notation.Move]()
             switch game.turn {
             case .white:
                 bestScore = Int.min
-                outer: for piece in pieces where piece.color == .white {
-                    for position in await sortedMoves(game: game, piece: piece) {
-                        guard let move = await game.move(piece, to: game.square(at: position), force: true) else { continue }
-                        let (score, moves) = await dfs(game: game, depth: depth - 1, alpha: alpha, beta: beta, moves: moves + [move])
-                        piece.position = game.undo()?.position
-                        bestMoves = bestMoves.isEmpty ? moves : bestMoves
-                        if score > bestScore {
-                            bestScore = score
-                            bestMoves = moves
-                        }
-                        alpha = max(alpha, score)
-                        if beta <= alpha {
-                            break outer
-                        }
+                for (piece, position) in await sortedMoves(game: game) {
+                    guard let move = await game.move(piece, to: game.square(at: position), force: true) else { continue }
+                    let (score, moves) = await dfs(game: game, depth: depth - 1, alpha: alpha, beta: beta, moves: moves + [move])
+                    piece.position = game.undo()?.position
+                    bestMoves = bestMoves.isEmpty ? moves : bestMoves
+                    if score > bestScore {
+                        bestScore = score
+                        bestMoves = moves
+                    }
+                    alpha = max(alpha, score)
+                    if beta <= alpha {
+                        break
                     }
                 }
             case .black:
                 bestScore = Int.max
-                outer: for piece in pieces where piece.color == .black {
-                    for position in await sortedMoves(game: game, piece: piece) {
-                        guard let move = await game.move(piece, to: game.square(at: position), force: true) else { continue }
-                        let (score, moves) = await dfs(game: game, depth: depth - 1, alpha: alpha, beta: beta, moves: moves + [move])
-                        piece.position = game.undo()?.position
-                        bestMoves = bestMoves.isEmpty ? moves : bestMoves
-                        if score < bestScore {
-                            bestScore = score
-                            bestMoves = moves
-                        }
-                        beta = min(beta, score)
-                        if beta <= alpha {
-                            break outer
-                        }
+                for (piece, position) in await sortedMoves(game: game) {
+                    guard let move = await game.move(piece, to: game.square(at: position), force: true) else { continue }
+                    let (score, moves) = await dfs(game: game, depth: depth - 1, alpha: alpha, beta: beta, moves: moves + [move])
+                    piece.position = game.undo()?.position
+                    bestMoves = bestMoves.isEmpty ? moves : bestMoves
+                    if score < bestScore {
+                        bestScore = score
+                        bestMoves = moves
+                    }
+                    beta = min(beta, score)
+                    if beta <= alpha {
+                        break
                     }
                 }
             }
@@ -73,18 +68,24 @@ extension CPU {
         }
         return whiteScore - blackScore
     }
-    
-    private func sortedMoves(game: Game, piece: Piece) async -> [Position] {
-        (await game.moves(for: piece)).sorted { lhs, rhs in
-            let lhsPromotes = piece.type == .pawn && (lhs.rank == Game.size - 1 || lhs.rank == 0)
-            let rhsPromotes = piece.type == .pawn && (rhs.rank == Game.size - 1 || rhs.rank == 0)
+
+    private func sortedMoves(game: Game) async -> [(Piece, Position)] {
+        var moves = [(Piece, Position)]()
+        for piece in game.board.pieces.filter({ $0.color == game.turn }) {
+            moves.append(contentsOf: (await game.moves(for: piece)).map { (piece, $0) })
+        }
+        return moves.sorted { lhs, rhs in
+            let lhsPiece = lhs.0, rhsPiece = rhs.0
+            let lhsPosition = lhs.1, rhsPosition = rhs.1
+            let lhsPromotes = lhsPiece.type == .pawn && (lhsPosition.rank == Game.size - 1 || lhsPosition.rank == 0)
+            let rhsPromotes = rhsPiece.type == .pawn && (rhsPosition.rank == Game.size - 1 || rhsPosition.rank == 0)
             guard lhsPromotes == rhsPromotes else { return lhsPromotes && !rhsPromotes }
-            let lhsCaptures = game.square(at: lhs).piece != nil
-            let rhsCaptures = game.square(at: rhs).piece != nil
+            let lhsCaptures = game.square(at: lhsPosition).piece != nil
+            let rhsCaptures = game.square(at: rhsPosition).piece != nil
             guard lhsCaptures == rhsCaptures else { return lhsCaptures && !rhsCaptures }
-            let lhsValue = Piece(color: piece.color, type: piece.type, position: lhs).value
-            let rhsValue = Piece(color: piece.color, type: piece.type, position: rhs).value
-            return lhsValue > rhsValue
+            let lhsValue = Piece(color: lhsPiece.color, type: lhsPiece.type, position: lhsPosition).value
+            let rhsValue = Piece(color: rhsPiece.color, type: rhsPiece.type, position: rhsPosition).value
+            return lhsValue - lhsPiece.value > rhsValue - rhsPiece.value
         }
     }
 }
