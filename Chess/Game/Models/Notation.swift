@@ -48,16 +48,16 @@ struct Notation {
         case mate(winner: Piece.Color)
         case draw(reason: DrawReason)
         
-        var canMove: Bool {
+        var canStart: Bool {
             switch self {
-            case .idle, .play, .check: return true
+            case .idle: return true
             default: return false
             }
         }
         
-        var isEnded: Bool {
+        var canMove: Bool {
             switch self {
-            case .idle, .mate, .draw: return true
+            case .play, .check: return true
             default: return false
             }
         }
@@ -76,11 +76,13 @@ struct Notation {
     private(set) var states: [State]
     private(set) var positionsCount: [String: Int]
     private(set) var positions: [String]
+    private var defaultState = State.idle
     
     var halfMoves: Int { moves.count }
     var fullMoves: Int { Int((Double(halfMoves) / 2.0).rounded(.up)) }
-    var state: State { states.last ?? .idle }
+    var state: State { states.last ?? defaultState }
     var move: Move { moves.last ?? .unknown }
+    
     var lastActiveMoveIndex: Int {
         let index = moves.lastIndex { move in
             switch move {
@@ -114,5 +116,9 @@ struct Notation {
         let position = positions.removeLast()
         positionsCount[position, default: 0] -= 1
         return move
+    }
+    
+    mutating func start() {
+        defaultState = .play
     }
 }

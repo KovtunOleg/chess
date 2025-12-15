@@ -8,5 +8,5 @@
 import SwiftUI
 
 extension EnvironmentValues {
-  @Entry var gameSettings = GameSettings()
+    @Entry var gameSettings = GameSettings.default
 }

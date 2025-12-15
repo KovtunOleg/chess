@@ -70,8 +70,11 @@ struct ChessboardView: View {
                     stateAlert = nil
                 }
         }
-        .onChange(of: game) { _, _ in
+        .onChange(of: game) { oldValue, newValue in
             reset()
+            if oldValue.notation.state == .idle, newValue.notation.state == .play {
+                cpuMoveIfNeeded()
+            }
         }
     }
     
@@ -88,6 +91,13 @@ struct ChessboardView: View {
         }
         .cornerRadius(8)
         .shadow(radius: 2)
+        .overlay {
+            if game.notation.state == .idle {
+                Rectangle()
+                    .fill(Color.black.opacity(0.25))
+                    .cornerRadius(8)
+            }
+        }
     }
 
     @ViewBuilder
@@ -269,7 +279,7 @@ extension ChessboardView {
     func cpuMoveIfNeeded() {
         guard !gameSettings.playerCanMove(game.turn) else { return }
         Task {
-            let (_, moves) = await cpu.dfs(game: game.copy, depth: 3)
+            let (_, moves) = await cpu.search(game: game.copy, gameSettings: gameSettings)
             var piece: Piece?, square: Square?
             switch moves.first {
             case let .move(_piece, position, _, _):
@@ -324,7 +334,6 @@ extension ChessboardView {
         promoted = nil
         checked = nil
         lastMove = nil
-        cpuMoveIfNeeded()
     }
     
     private func update(_ notation: Notation) {

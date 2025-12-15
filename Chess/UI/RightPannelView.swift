@@ -20,12 +20,17 @@ struct RightPannelView: View {
     var body: some View {
         VStack {
             buttonsView()
-            gameSettingsView()
+            if !state.canMove {
+                gameSettingsView()
+            }
             notationView()
             Spacer()
         }
         .background(.gray.opacity(0.1))
         .padding(EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4))
+        .onAppear() {
+            reset()
+        }
     }
 }
 
@@ -33,9 +38,9 @@ extension RightPannelView {
     @ViewBuilder
     private func buttonsView() -> some View {
         Button(action: {
-            reset()
+            state.canStart ? start() : reset()
         }) {
-            Text("Start Game")
+            Text(state.canStart ? "Start" : "Reset")
                 .font(.title.bold())
                 .padding(4)
         }
@@ -45,23 +50,52 @@ extension RightPannelView {
     @ViewBuilder
     private func gameSettingsView() -> some View {
         @Bindable var gameSettings = gameSettings
-        VStack(alignment: .leading, spacing: 0) {
-            CustomPicker(selection: $gameSettings.gameType, segments: GameSettings.GameType.allCases) { type in
-                Text(type.description)
-                    .frame(maxWidth: .infinity, minHeight: 40)
-                    .font(Font.title2.bold())
+        VStack(alignment: .leading) {
+            CustomPicker(selection: $gameSettings.gameType.mode, segments: GameSettings.GameType.Mode.allCases) { mode in
+                Text(mode.description)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 40)
             }
-            .padding(4)
-            if case .playerVsComputer = gameSettings.gameType {
-                CustomPicker(selection: $gameSettings.playerColor, segments: Piece.Color.allCases) { color in
+            if case .playerVsComputer = gameSettings.gameType.mode {
+                CustomPicker(selection: $gameSettings.gameType.playerColor, segments: Piece.Color.allCases) { color in
                     Image(Piece(color: color, type: .king).image)
                         .resizable()
                         .scaledToFit()
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 40)
                 }
-                .padding(4)
+                CustomPicker(selection: $gameSettings.level, segments: GameSettings.GameLevel.allCases) { level in
+                    Text(level.description)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 40)
+                }
+            }
+            CustomPicker(selection: $gameSettings.timeControl.mode, segments: GameSettings.TimeControl.Mode.allCases) { mode in
+                VStack(spacing: 0) {
+                    let description = GameSettings.TimeControl(mode: mode, increment: gameSettings.timeControl.increment).description.split(separator: "|")
+                    Text(description[0])
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 25)
+                    Text(description[1])
+                        .font(Font.caption)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 15)
+                }
+            }
+            let incrementRange = GameSettings.TimeControl.incrementRange
+            Slider(value: $gameSettings.timeControl.increment, in: incrementRange, step: 1) {
+                Text("Increment")
+                    .frame(height: 25)
+            } minimumValueLabel: {
+                Text("\(Int(incrementRange.lowerBound))")
+                    .font(Font.title3.bold())
+            } maximumValueLabel: {
+                Text("\(Int(incrementRange.upperBound))")
+                    .font(Font.title3.bold())
             }
         }
-        .disabled(!state.isEnded)
+        .padding(4)
+        .font(Font.title3.bold())
     }
     
     @ViewBuilder
@@ -105,6 +139,10 @@ extension RightPannelView {
             guard error is FENParser.ParsingError else { print("Unknown error"); return }
             print("Invalid FEN format")
         }
+    }
+    
+    private func start() {
+        game.start()
     }
 }
 

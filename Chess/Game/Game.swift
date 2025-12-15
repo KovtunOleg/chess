@@ -111,6 +111,10 @@ final class Game: Equatable, Identifiable {
         return undoPiece
     }
     
+    func start() {
+        notation.start()
+    }
+    
     func square(at position: Position) -> Square {
         board[position.rank][position.file]
     }
