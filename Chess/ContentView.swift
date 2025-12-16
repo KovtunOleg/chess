@@ -12,8 +12,8 @@ struct ContentView: View {
     @State private var game = Game()
     
     var body: some View {
-        let minBoardSize = 500.0
-        let minRightPannelSize = 200.0
+        let minBoardSize = 600.0
+        let minRightPannelSize = 300.0
         GeometryReader { geometry in
             let boardSize = max(minBoardSize, min(geometry.size.width, geometry.size.height))
             let rightPannelSize = max(minRightPannelSize, geometry.size.width - boardSize)

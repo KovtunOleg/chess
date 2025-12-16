@@ -12,6 +12,7 @@ import SwiftUI
 struct ChessboardView: View {
     private typealias Move = (from: Position, to: Position)
     private typealias Promoted = (piece: Piece, position: Position)
+    private typealias Time = (black: Double, white: Double)
     
     @Binding private(set) var game: Game
     @Environment(\.gameSettings) var gameSettings
@@ -34,46 +35,66 @@ struct ChessboardView: View {
     @State private var lastMove: Move?
     @State private var stateAlert: StateAlert?
     @State private var cpu = CPU()
+    @State private var timer: Timer?
+    @State private var time: Time?
     @State private var notationCancellable: AnyCancellable?
     
-    var state: Notation.State { game.notation.state }
+    private var state: Notation.State { game.notation.state }
     
     private static let boardCoordinateSpace = "board"
     
     var body: some View {
         GeometryReader { geometry in
             let annotationSize = 20.0
-            let size = min(geometry.size.width, geometry.size.height) + annotationSize
-            let boardSize = size - annotationSize
+            let clockSize: CGFloat = 40.0
+            let size = min(geometry.size.width, geometry.size.height)
+            let boardSize = size - annotationSize - 2 * clockSize
             let squareSize = boardSize / CGFloat(Game.size)
-            HStack(spacing: 0) {
-                VStack(spacing: 0) {
-                    rankAnnotationView()
-                    Spacer(minLength: annotationSize)
-                }
-                VStack(spacing: 0) {
-                    ZStack(alignment: .topLeading) {
-                        boardView(squareSize: squareSize)
-                        movesView(size: squareSize)
-                        selectedPieceView(size: squareSize)
-                        promoteView(size: squareSize)
+            let rotate = gameSettings.rotateBoard
+            VStack(spacing: 0) {
+                timerView(color: rotate ? .white : .black)
+                    .frame(height: clockSize)
+                HStack(spacing: 0) {
+                    VStack(spacing: 0) {
+                        rankAnnotationView()
+                        Spacer(minLength: annotationSize)
                     }
-                    .coordinateSpace(name: Self.boardCoordinateSpace)
-                    fileAnnotationView()
+                    VStack(spacing: 0) {
+                        ZStack(alignment: .topLeading) {
+                            boardView(squareSize: squareSize)
+                            movesView(size: squareSize)
+                            selectedPieceView(size: squareSize)
+                            promoteView(size: squareSize)
+                        }
+                        .coordinateSpace(name: Self.boardCoordinateSpace)
+                        fileAnnotationView()
+                            .frame(height: annotationSize)
+                    }
+                    .frame(width: boardSize + annotationSize, height: boardSize)
                 }
+                timerView(color: rotate ? .black : .white)
+                    .frame(height: clockSize)
             }
-            .frame(width: size, height: size)
+            .frame(width: size, height: boardSize + annotationSize + 2 * clockSize)
             .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
         }
-        .padding()
         .sheet(item: $stateAlert) { item in
             StateAlertView(state: item)
                 .onTapGesture {
                     stateAlert = nil
                 }
+                .task {
+                    stopTimer()
+                }
         }
-        .onChange(of: game) { oldValue, newValue in
+        .onChange(of: game) { _, _ in
             reset()
+        }
+        .onChange(of: gameSettings.timeControl) { _, _ in
+            setTime()
+        }
+        .onAppear() {
+            setTime()
         }
     }
     
@@ -270,9 +291,37 @@ struct ChessboardView: View {
             .scaledToFit()
             .frame(width: size, height: size)
     }
+    
+    @ViewBuilder
+    private func timerView(color: Piece.Color) -> some View {
+        if let time {
+            let total = color == .white ? time.white : time.black
+            let minutes = Int(total / Double(secondsInMinute))
+            let seconds = Int(total.truncatingRemainder(dividingBy: Double(secondsInMinute)))
+            let milliseconds = Int((total - Double(minutes) * Double(secondsInMinute) - Double(seconds)) * 100.0)
+            let format = "%02d"
+            let defaultState = game.turn == color && timer != nil
+            let criticalTime = 20.0
+            Label {
+                HStack(alignment: .bottom, spacing: 0) {
+                    Text("\(String(format: format, minutes)):\(String(format: format, seconds))")
+                        .font(.largeTitle.monospacedDigit())
+                    Text("." + String(format: format, milliseconds))
+                        .font(.caption.monospacedDigit())
+                        .frame(height: 20)
+                        .foregroundStyle(defaultState ? (total > criticalTime ? .gray : .red) : .gray)
+                }
+            } icon: {
+                Image(systemName: "clock").bold()
+            }
+            .frame(width: 140, height: 40)
+            .foregroundStyle(defaultState ? (total > criticalTime ? .black : .red) : .gray)
+        }
+    }
 }
 
 extension ChessboardView {
+    // MARK: Game
     func playerMove(_ piece: Piece, to square: Square) {
         Task {
             guard selected != nil else { return }
@@ -301,11 +350,7 @@ extension ChessboardView {
         }
     }
     
-    private func canSelect(_ piece: Piece) -> Bool {
-        promoted == nil && piece.color == game.turn &&
-        state.canMove && gameSettings.playerCanMove(piece.color)
-    }
-    
+    // MARK: Positioning
     private func getPoint(for square: Square, size: CGFloat) -> CGPoint {
         let rotate = gameSettings.rotateBoard
         return CGPoint(x: size * Double(rotate ? Game.size - square.position.file : square.position.file) + (rotate ? -1 : 1) * size / 2,
@@ -318,6 +363,11 @@ extension ChessboardView {
                                 file: rotate ? Game.size - Int(point.x / size) - 1 : Int(point.x / size))
         guard position.isValid else { return nil }
         return game.square(at: position)
+    }
+
+    private func canSelect(_ piece: Piece) -> Bool {
+        promoted == nil && piece.color == game.turn &&
+        state.canMove && gameSettings.playerCanMove(piece.color)
     }
     
     private func reset() {
@@ -337,7 +387,10 @@ extension ChessboardView {
             .sink { notation in
                 update(notation)
                 cpuMoveIfNeeded()
+                tick()
             }
+        setTime()
+        stopTimer()
         selected = nil
         promoted = nil
         checked = nil
@@ -365,6 +418,49 @@ extension ChessboardView {
         case .unknown:
             lastMove = nil
         }
+    }
+    
+    // MARK: Timer
+    private func tick() {
+        guard !game.notation.moves.isEmpty else { return }
+        if timer == nil {
+            runTimer()
+        }
+        guard let time else { return }
+        switch game.turn {
+        case .white:
+            self.time = (black: time.black + gameSettings.timeControl.increment, white: time.white)
+        case .black:
+            self.time = (black: time.black, white: time.white + gameSettings.timeControl.increment)
+        }
+    }
+    
+    private func runTimer() {
+        let timeInterval = 0.01
+        timer = Timer.scheduledTimer(withTimeInterval: timeInterval, repeats: true) { timer in
+            Task { @MainActor in
+                guard let time else { return }
+                switch game.turn {
+                case .white:
+                    self.time = (black: time.black, white: max(time.white - timeInterval, 0))
+                    guard self.time?.white == 0 else { break }
+                    stateAlert = .timeout(.black)
+                case .black:
+                    self.time = (black: max(time.black - timeInterval, 0), white: time.white)
+                    guard self.time?.black == 0 else { break }
+                    stateAlert = .timeout(.white)
+                }
+            }
+        }
+    }
+    
+    private func stopTimer() {
+        timer?.invalidate()
+        timer = nil
+    }
+    
+    private func setTime() {
+        time = Time(black: gameSettings.timeControl.time * Double(secondsInMinute), white: gameSettings.timeControl.time * Double(secondsInMinute))
     }
 }
 

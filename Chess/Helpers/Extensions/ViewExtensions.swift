@@ -54,9 +54,9 @@ struct AnimatedBorder: ViewModifier {
             .background {
                 if animate {
                     GeometryReader { geometry in
-                        let dash = 50.0
                         let lineWidth = 2.0
                         let perimeter = 2 * (geometry.size.width + geometry.size.height + .pi * cornerRadius - 4 * cornerRadius - 2 * lineWidth)
+                        let dash = perimeter / 4
                         RoundedRectangle(cornerRadius: cornerRadius)
                             .strokeBorder(style: StrokeStyle(lineWidth: lineWidth,
                                                              lineCap: .round,

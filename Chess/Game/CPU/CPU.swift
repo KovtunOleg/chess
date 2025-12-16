@@ -11,7 +11,7 @@ final class CPU {
     /// returns position evaluation at the given `depth` and the best moves line
     func search(game: Game, gameSettings: GameSettings) async -> (Int, [Notation.Move]) {
         let averageMovesCount = 40 // approximately
-        let timePerMove = DispatchTimeInterval.milliseconds( Int((gameSettings.timeControl.time * 60 / Double(averageMovesCount))) * 1_000 )
+        let timePerMove = DispatchTimeInterval.milliseconds( Int((gameSettings.timeControl.time * Double(secondsInMinute) / Double(averageMovesCount))) * millisecondsInSecond )
         return await dfs(game: game, depth: gameSettings.level.depth, until: DispatchTime.now().advanced(by: timePerMove))
     }
 }

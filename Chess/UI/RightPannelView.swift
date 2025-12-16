@@ -18,16 +18,18 @@ struct RightPannelView: View {
     var moves: [Notation.Move] { game.notation.moves }
     
     var body: some View {
-        VStack {
-            buttonsView()
-            if !state.canMove {
-                gameSettingsView()
+        ZStack {
+            VStack {
+                buttonsView()
+                if !state.canMove {
+                    gameSettingsView()
+                }
+                notationView()
+                Spacer()
             }
-            notationView()
-            Spacer()
+            .padding(8)
         }
         .background(.gray.opacity(0.1))
-        .padding(EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4))
         .onAppear() {
             reset()
         }
@@ -95,7 +97,6 @@ extension RightPannelView {
                     .font(Font.title3.bold())
             }
         }
-        .padding(4)
         .font(Font.title3.bold())
     }
     

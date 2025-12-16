@@ -8,13 +8,15 @@
 import SwiftUI
 
 enum StateAlert: Identifiable {
-    case mate(_ winner: Piece.Color)
     case draw(_ reason: Notation.State.DrawReason)
+    case mate(_ winner: Piece.Color)
+    case timeout(_ winner: Piece.Color)
     
     var id: String {
         switch self {
-        case .mate: return "mate"
         case .draw: return "draw"
+        case .mate: return "mate"
+        case .timeout: return "timeout"
         }
     }
 }
@@ -25,10 +27,9 @@ struct StateAlertView: View {
         VStack {
             Text({
                 switch state {
-                case .mate:
-                    return "Mate"
-                case .draw:
-                    return "Draw"
+                case .draw: return "Draw"
+                case .mate: return "Mate"
+                case .timeout: return "Timeout"
                 }
             }())
             .font(.title.bold())
@@ -43,8 +44,9 @@ struct StateAlertView: View {
                 Image(.whiteKing)
                 Text({
                     switch state {
-                    case let .mate(winner): return winner == .white ? "1 - 0" : "0 - 1"
                     case .draw: return "1/2 - 1/2"
+                    case let .mate(winner): return winner == .white ? "1 - 0" : "0 - 1"
+                    case let .timeout(winner): return winner == .white ? "1 - 0" : "0 - 1"
                     }
                 }())
                 .font(.largeTitle.bold())
