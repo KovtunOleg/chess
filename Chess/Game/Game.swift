@@ -113,6 +113,7 @@ final class Game: Equatable, Identifiable {
     
     func start() {
         notation.start()
+        notationPublisher.send(notation)
     }
     
     func square(at position: Position) -> Square {

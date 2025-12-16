@@ -36,6 +36,8 @@ struct ChessboardView: View {
     @State private var cpu = CPU()
     @State private var notationCancellable: AnyCancellable?
     
+    var state: Notation.State { game.notation.state }
+    
     private static let boardCoordinateSpace = "board"
     
     var body: some View {
@@ -72,9 +74,6 @@ struct ChessboardView: View {
         }
         .onChange(of: game) { oldValue, newValue in
             reset()
-            if oldValue.notation.state == .idle, newValue.notation.state == .play {
-                cpuMoveIfNeeded()
-            }
         }
     }
     
@@ -92,12 +91,13 @@ struct ChessboardView: View {
         .cornerRadius(8)
         .shadow(radius: 2)
         .overlay {
-            if game.notation.state == .idle {
+            if state.canStart {
                 Rectangle()
                     .fill(Color.black.opacity(0.25))
                     .cornerRadius(8)
             }
         }
+        .rotationEffect(gameSettings.rotateBoard ? .radians(.pi) : .zero)
     }
 
     @ViewBuilder
@@ -110,11 +110,10 @@ struct ChessboardView: View {
                 .frame(width: size, height: size)
             
             if let piece = square.piece {
-                Image(piece.image)
-                    .resizable()
-                    .scaledToFit()
+                pieceView(for: piece, size: size)
                     .opacity(selected == piece || promoted?.piece == piece ? 0 : 1)
                     .shadow(color: checked == piece ? .red : .clear, radius: 10)
+                    .rotationEffect(gameSettings.rotateBoard ? .radians(.pi) : .zero)
                     .gesture(
                         SimultaneousGesture(
                             DragGesture(coordinateSpace: .named(Self.boardCoordinateSpace))
@@ -143,9 +142,7 @@ struct ChessboardView: View {
     @ViewBuilder
     private func selectedPieceView(size: CGFloat) -> some View {
         if let piece = selected {
-            Image(piece.image)
-                .resizable()
-                .scaledToFit()
+            pieceView(for: piece, size: size)
                 .position(piece.dragPosition)
                 .shadow(color: .green, radius: 10)
                 .frame(width: size, height: size)
@@ -202,7 +199,8 @@ struct ChessboardView: View {
     @ViewBuilder
     private func fileAnnotationView() -> some View {
         HStack {
-            ForEach((0..<Game.size), id: \.self) { file in
+            let range = gameSettings.rotateBoard ? Array((0..<Game.size).reversed()) : Array(0..<Game.size)
+            ForEach(range, id: \.self) { file in
                 Spacer()
                 Text(file.fileString.uppercased())
                     .font(.caption2)
@@ -216,7 +214,8 @@ struct ChessboardView: View {
     @ViewBuilder
     private func rankAnnotationView() -> some View {
         VStack {
-            ForEach((0..<Game.size).reversed(), id: \.self) { rank in
+            let range = gameSettings.rotateBoard ? Array(0..<Game.size) : Array((0..<Game.size).reversed())
+            ForEach(range, id: \.self) { rank in
                 Spacer()
                 Text(rank.rankString)
                     .font(.caption2)
@@ -230,20 +229,18 @@ struct ChessboardView: View {
     @ViewBuilder
     private func promoteView(size: CGFloat) -> some View {
         if let piece = promoted?.piece, let position = promoted?.position {
+            let rotate = gameSettings.rotateBoard
             let types: [Piece.`Type`] = [.queen, .rook, .bishop, .knight]
             let pieces = {
                 var pieces = types.map { Piece(color: game.turn, type: $0) }
-                if (piece.color == .black) { pieces.reverse() }
+                if (piece.color == .black && !rotate) { pieces.reverse() }
                 return pieces
             }()
             let center = CGPoint(x: getPoint(for: game.square(at: position), size: size).x,
-                                 y: (piece.color == .white ? 0 : size * CGFloat(pieces.count)) + size * CGFloat(pieces.count) / 2)
+                                 y: (piece.color == .white || rotate ? 0 : size * CGFloat(pieces.count)) + size * CGFloat(pieces.count) / 2)
             VStack(spacing: 0) {
                 ForEach(pieces, id: \.self) { piece in
-                    Image(piece.image)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: size, height: size)
+                    pieceView(for: piece, size: size)
                         .onHover { view in
                             view
                                 .shadow(color: .green, radius: 10)
@@ -264,6 +261,14 @@ struct ChessboardView: View {
             )
             .position(center)
         }
+    }
+    
+    @ViewBuilder
+    private func pieceView(for piece: Piece, size: CGFloat) -> some View {
+        Image(piece.image)
+            .resizable()
+            .scaledToFit()
+            .frame(width: size, height: size)
     }
 }
 
@@ -298,16 +303,19 @@ extension ChessboardView {
     
     private func canSelect(_ piece: Piece) -> Bool {
         promoted == nil && piece.color == game.turn &&
-        game.notation.state.canMove && gameSettings.playerCanMove(piece.color)
+        state.canMove && gameSettings.playerCanMove(piece.color)
     }
     
     private func getPoint(for square: Square, size: CGFloat) -> CGPoint {
-        CGPoint(x: size * Double(square.position.file) + size / 2,
-                y: size * Double(Game.size - square.position.rank) - size / 2)
+        let rotate = gameSettings.rotateBoard
+        return CGPoint(x: size * Double(rotate ? Game.size - square.position.file : square.position.file) + (rotate ? -1 : 1) * size / 2,
+                y: size * Double(rotate ? square.position.rank : Game.size - square.position.rank) + (rotate ? 1 : -1) * size / 2)
     }
     
     private func getSquare(at point: CGPoint, size: CGFloat) -> Square? {
-        let position = Position(rank: Game.size - Int(point.y / size) - 1, file: Int(point.x / size))
+        let rotate = gameSettings.rotateBoard
+        let position = Position(rank: rotate ? Int(point.y / size): Game.size - Int(point.y / size) - 1,
+                                file: rotate ? Game.size - Int(point.x / size) - 1 : Int(point.x / size))
         guard position.isValid else { return nil }
         return game.square(at: position)
     }

@@ -13,9 +13,9 @@ import SwiftUI
 struct RightPannelView: View {
     @Binding private(set) var game: Game
     @Environment(\.gameSettings) var gameSettings
-    @State private var moves = [Notation.Move]()
-    @State private var state = Notation.State.idle
-    @State private var notationCancellable: AnyCancellable?
+    
+    var state: Notation.State { game.notation.state }
+    var moves: [Notation.Move] { game.notation.moves }
     
     var body: some View {
         VStack {
@@ -44,6 +44,7 @@ extension RightPannelView {
                 .font(.title.bold())
                 .padding(4)
         }
+        .animatedBorder(animate: state.canStart)
         .padding()
     }
     
@@ -126,14 +127,7 @@ extension RightPannelView {
 extension RightPannelView {
     private func reset() {
         do {
-            moves.removeAll()
-            state = .idle
             game = try FENParser.parse(fen: FENParser.startPosition)
-            notationCancellable = game.notationPublisher
-                .sink { notation in
-                    moves = notation.moves
-                    state = notation.state
-                }
 
         } catch {
             guard error is FENParser.ParsingError else { print("Unknown error"); return }

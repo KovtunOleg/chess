@@ -94,8 +94,15 @@ class GameSettings: Identifiable {
         return true
     }
     
+    var rotateBoard: Bool {
+        switch gameType.playerColor {
+        case .white: return false
+        case .black: return true
+        }
+    }
+    
     var id: String {
-       "settings"
+        "settings"
     }
     
     init(gameType: GameType, level: GameLevel, timeControl: TimeControl) {
