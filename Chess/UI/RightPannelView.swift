@@ -121,7 +121,7 @@ extension RightPannelView {
             }
         }
         .defaultScrollAnchor(.bottom, for: .sizeChanges)
-        .padding(EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4))
+        .padding(4)
     }
 }
 
@@ -137,7 +137,9 @@ extension RightPannelView {
     }
     
     private func start() {
-        game.start()
+        Task {
+            await game.start()
+        }
     }
 }
 

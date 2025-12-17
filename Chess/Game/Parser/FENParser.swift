@@ -10,7 +10,7 @@ final class FENParser {
     enum ParsingError: Error {
         case invalidFENFormat
     }
-    static let startPosition = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+    static let startPosition = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 0"
     
     static func parse(fen: String) throws -> Game {
         let fenParts = fen.split(separator: " ")
@@ -22,13 +22,18 @@ final class FENParser {
         for (rank, row) in rows.split(separator: "/").reversed().enumerated() {
             var file = 0
             for char in row {
-                board[rank][file].piece = parsePiece(char)
+                let piece = parsePiece(char)
+                board[rank][file].piece = piece
+                if let piece, piece.type == .pawn, let position = piece.position,
+                   (piece.color == .white && position.rank != 1) || (piece.color == .black && position.rank != Game.size - 2) {
+                    piece.movesCount = 1
+                }
                 file += (Int("\(char)") ?? 1) // skip empty squares
             }
         }
         
-        // 2. Active Color (not used)
-        _ = fenParts[1] == "b" ? Piece.Color.black : .white
+        // 2. Active Color
+        let activeColor = fenParts[1] == "b" ? Piece.Color.black : .white
         
         // 3. Castling Rights
         let castlingRights = fenParts[2]
@@ -38,7 +43,7 @@ final class FENParser {
             let canCastleQueenside = castlingRights.contains(queenChar)
             if !canCastleKingside { kingsideRook(pieces)?.movesCount = 1 }
             if !canCastleQueenside { queensideRook(pieces)?.movesCount = 1  }
-            if !canCastleKingside || !canCastleQueenside { king(pieces)?.movesCount = 1 }
+            if !canCastleKingside && !canCastleQueenside { king(pieces)?.movesCount = 1 }
         }
         setCastlingRights(kingChar: "K", queenChar: "Q", pieces: pieces.filter { $0.color == .white })
         setCastlingRights(kingChar: "k", queenChar: "q", pieces: pieces.filter { $0.color == .black })
@@ -48,23 +53,25 @@ final class FENParser {
         var enPassantMoves = [Notation.Move]()
         if enPassant != "-" {
             let pawnPosition = Position(
-                rank: Int("\(enPassant.last ?? "0")") ?? 0 == 3 ? 4 : 5,
+                rank: Int("\(enPassant.last ?? "0")") ?? 0,
                 file: Int(UnicodeScalar("\(enPassant.first ?? "a")")!.value - UnicodeScalar("a").value))
-            if let pawn = pieces.first(where: { $0.type == .pawn && $0.position == pawnPosition }) {
-                pawn.movesCount = 1
+            if let pawn = pieces.first(where: {
+                $0.type == .pawn && $0.color != activeColor && $0.position == pawnPosition
+            }) {
                 let copy = pawn.copy
                 copy.position = Position(rank: pawnPosition.rank + (pawn.color == .black ? 2 : -2), file: pawnPosition.file)
                 enPassantMoves.append(.move(piece: copy, to: pawnPosition))
             }
         }
         
+        // 6. Fullmove Number
+        let fullMoves = Int(fenParts[5]) ?? 0
+        
         // 5. Halfmove Clock
         let halfmoves = Int(fenParts[4]) ?? 0
-        let moves = [Notation.Move](repeating: .unknown, count: halfmoves - enPassantMoves.count)
-        let notation = Notation(moves: moves + enPassantMoves)
-        
-        // 6. Fullmove Number (not used)
-        _ = Int(fenParts[5]) ?? 0
+        let moves = [Notation.Move](repeating: .unknown, count: fullMoves * 2 + (activeColor == .white ? 0 : 1) - enPassantMoves.count)
+        var notation = Notation(moves: moves + enPassantMoves)
+        notation.setHalfmoveClock(halfmoves)
         
         return Game(board: board, notation: notation)
     }

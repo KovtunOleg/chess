@@ -8,11 +8,22 @@
 import Foundation
 
 final class CPU {
+    private var task: Task<(Int, [Notation.Move])?, Never>?
+    
     /// returns position evaluation at the given `depth` and the best moves line
-    func search(game: Game, gameSettings: GameSettings) async -> (Int, [Notation.Move]) {
-        let averageMovesCount = 40 // approximately
-        let timePerMove = DispatchTimeInterval.milliseconds( Int((gameSettings.timeControl.time * Double(secondsInMinute) / Double(averageMovesCount))) * millisecondsInSecond )
-        return await dfs(game: game, depth: gameSettings.level.depth, until: DispatchTime.now().advanced(by: timePerMove))
+    func search(game: Game, gameSettings: GameSettings) async -> (Int, [Notation.Move])? {
+        task = Task {
+            let averageMovesCount = 40 // approximately
+            let timePerMove = DispatchTimeInterval.milliseconds( Int((gameSettings.timeControl.time * Double(secondsInMinute) / Double(averageMovesCount))) * millisecondsInSecond )
+            return await dfs(game: game, depth: gameSettings.level.depth, until: DispatchTime.now().advanced(by: timePerMove))
+        }
+        task?.escalatePriority(to: .high)
+        return await task?.value
+    }
+    
+    func cancel() {
+        task?.cancel()
+        task = nil
     }
 }
 
@@ -22,8 +33,9 @@ extension CPU {
                      until: DispatchTime,
                      alpha: Int = Int.min,
                      beta: Int = Int.max,
-                     moves: [Notation.Move] = []) async -> (Int, [Notation.Move]) {
-        await Task(priority: .high) {
+                     moves: [Notation.Move] = []) async -> (Int, [Notation.Move])? {
+        await Task {
+            guard let task, !task.isCancelled else { return nil }
             switch game.notation.state {
             case .draw: return (0, moves)
             case let .mate(winner): return (winner == .white ? Int.max : Int.min, moves)
@@ -36,8 +48,8 @@ extension CPU {
                 bestScore = Int.min
                 for (piece, position) in await sortedMoves(game: game) {
                     guard let move = await game.move(piece, to: game.square(at: position), force: true) else { continue }
-                    let (score, moves) = await dfs(game: game, depth: depth - 1, until: until, alpha: alpha, beta: beta, moves: moves + [move])
-                    piece.position = game.undo()?.position
+                    guard let (score, moves) = await dfs(game: game, depth: depth - 1, until: until, alpha: alpha, beta: beta, moves: moves + [move]) else { return nil }
+                    game.undo(for: piece)
                     bestMoves = bestMoves.isEmpty ? moves : bestMoves
                     if score > bestScore {
                         bestScore = score
@@ -52,8 +64,8 @@ extension CPU {
                 bestScore = Int.max
                 for (piece, position) in await sortedMoves(game: game) {
                     guard let move = await game.move(piece, to: game.square(at: position), force: true) else { continue }
-                    let (score, moves) = await dfs(game: game, depth: depth - 1, until: until, alpha: alpha, beta: beta, moves: moves + [move])
-                    piece.position = game.undo()?.position
+                    guard let (score, moves) = await dfs(game: game, depth: depth - 1, until: until, alpha: alpha, beta: beta, moves: moves + [move]) else { return nil }
+                    game.undo(for: piece)
                     bestMoves = bestMoves.isEmpty ? moves : bestMoves
                     if score < bestScore {
                         bestScore = score

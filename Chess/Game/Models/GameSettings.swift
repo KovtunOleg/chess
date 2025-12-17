@@ -23,6 +23,7 @@ class GameSettings: Identifiable {
         }
         var mode: Mode
         var playerColor: Piece.Color
+        var computerColor: Piece.Color { playerColor == .white ? .black : .white }
         
         var description: String {
             mode.description

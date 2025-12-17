@@ -56,7 +56,7 @@ extension Piece {
             }
         }
     }
-    enum Color: Hashable, CaseIterable, CustomStringConvertible {
+    enum Color: Hashable, CaseIterable, CustomStringConvertible, Codable {
         case white, black
         
         var description: String {
@@ -88,8 +88,8 @@ extension Piece: Hashable {
     }
     
     func hash(into hasher: inout Hasher) {
-        hasher.combine(color)
         hasher.combine(type)
+        hasher.combine(color)
         hasher.combine(position)
     }
 }

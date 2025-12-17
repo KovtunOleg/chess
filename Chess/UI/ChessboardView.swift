@@ -85,16 +85,14 @@ struct ChessboardView: View {
                 }
                 .task {
                     stopTimer()
+                    stopCPU()
                 }
         }
         .onChange(of: game) { _, _ in
-            reset()
+            resetGame()
         }
         .onChange(of: gameSettings.timeControl) { _, _ in
-            setTime()
-        }
-        .onAppear() {
-            setTime()
+            resetTime()
         }
     }
     
@@ -112,7 +110,7 @@ struct ChessboardView: View {
         .cornerRadius(8)
         .shadow(radius: 2)
         .overlay {
-            if state.canStart {
+            if state.canStart || promoted != nil {
                 Rectangle()
                     .fill(Color.black.opacity(0.25))
                     .cornerRadius(8)
@@ -127,7 +125,7 @@ struct ChessboardView: View {
         ZStack {
             Rectangle()
                 .fill(baseColor)
-                .border(.blue.opacity(lastMove?.from == square.position ? 0.5 : 1), width: lastMove?.from == square.position || lastMove?.to == square.position ? 4 : 0)
+                .border(.green.opacity(lastMove?.from == square.position ? 0.5 : 1), width: lastMove?.from == square.position || lastMove?.to == square.position ? 4 : 0)
                 .frame(width: size, height: size)
             
             if let piece = square.piece {
@@ -281,6 +279,7 @@ struct ChessboardView: View {
                     .stroke(.black.opacity(0.5), lineWidth: 4)
             )
             .position(center)
+            .frame(width: size)
         }
     }
     
@@ -333,7 +332,7 @@ extension ChessboardView {
     func cpuMoveIfNeeded() {
         guard !gameSettings.playerCanMove(game.turn) else { return }
         Task {
-            let (_, moves) = await cpu.search(game: game.copy, gameSettings: gameSettings)
+            guard let (_, moves) = await cpu.search(game: game.copy, gameSettings: gameSettings) else { return }
             var piece: Piece?, square: Square?
             switch moves.first {
             case let .move(_piece, position, _, _):
@@ -370,7 +369,7 @@ extension ChessboardView {
         state.canMove && gameSettings.playerCanMove(piece.color)
     }
     
-    private func reset() {
+    private func resetGame() {
         game.onPromote = { pawn, position in
             Task {
                 guard gameSettings.playerCanMove(pawn.color) else { return Piece(color: pawn.color, type: .queen) } // for CPU default to queen
@@ -389,8 +388,9 @@ extension ChessboardView {
                 cpuMoveIfNeeded()
                 tick()
             }
-        setTime()
+        resetTime()
         stopTimer()
+        stopCPU()
         selected = nil
         promoted = nil
         checked = nil
@@ -459,7 +459,11 @@ extension ChessboardView {
         timer = nil
     }
     
-    private func setTime() {
+    private func stopCPU() {
+        cpu.cancel()
+    }
+    
+    private func resetTime() {
         time = Time(black: gameSettings.timeControl.time * Double(secondsInMinute), white: gameSettings.timeControl.time * Double(secondsInMinute))
     }
 }

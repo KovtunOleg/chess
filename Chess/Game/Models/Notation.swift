@@ -25,8 +25,8 @@ struct Notation {
         }
     }
     
-    enum State: Hashable, CustomStringConvertible {
-        enum DrawReason: Hashable, CustomStringConvertible {
+    enum State: Hashable, CustomStringConvertible, Codable {
+        enum DrawReason: Hashable, CustomStringConvertible, Codable {
             case stalemate
             case threefoldRepetition
             case insufficientMaterial
@@ -77,6 +77,7 @@ struct Notation {
     private(set) var positionsCount: [String: Int]
     private(set) var positions: [String]
     private var defaultState = State.idle
+    private var defaultLastActiveMoveIndex = 0
     
     var halfMoves: Int { moves.count }
     var fullMoves: Int { Int((Double(halfMoves) / 2.0).rounded(.up)) }
@@ -86,12 +87,10 @@ struct Notation {
     var lastActiveMoveIndex: Int {
         let index = moves.lastIndex { move in
             switch move {
-            case let .move(piece, _, captured, _):
-                return piece.type == .pawn || captured != nil
-            case .castle: return false
-            case .unknown: return true
+            case let .move(piece, _, captured, _): return piece.type == .pawn || captured != nil
+            default: return false
             }
-        } ?? 0
+        } ?? defaultLastActiveMoveIndex * 2
         return Int((Double(index) / 2.0).rounded(.up))
     }
     
@@ -102,8 +101,8 @@ struct Notation {
         self.positionsCount = positions.reduce(into: [:]) { $0[$1, default: 0] += 1 }
     }
     
-    mutating func update(with move: Move, state: State, position: String) {
-        moves.append(move)
+    mutating func update(with move: Move? = nil, state: State, position: String) {
+        if let move { moves.append(move) }
         states.append(state)
         positions.append(position)
         positionsCount[position, default: 0] += 1
@@ -120,5 +119,9 @@ struct Notation {
     
     mutating func start() {
         defaultState = .play
+    }
+    
+    mutating func setHalfmoveClock(_ index: Int) {
+        defaultLastActiveMoveIndex = index
     }
 }
