@@ -400,7 +400,7 @@ extension ChessboardView {
     private func resetGame() {
         game.onPromote = { pawn, position in
             Task {
-                guard gameSettings.playerCanMove(pawn.color) else { return Piece(color: pawn.color, type: .queen) } // for CPU default to queen
+                guard gameSettings.playerCanMove(pawn.color) && !gameSettings.autoQueen else { return Piece(color: pawn.color, type: .queen) } // for CPU default to queen
                 promoted = (pawn, position)
                 while promoted?.piece.type == .pawn {
                     try? await Task.sleep(for: .milliseconds(1))
@@ -423,6 +423,7 @@ extension ChessboardView {
         promoted = nil
         checked = nil
         lastMove = nil
+        capturedPieces = (black: SortedArray([]), white: SortedArray([]))
     }
     
     private func update(_ notation: Notation) {

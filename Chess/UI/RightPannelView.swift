@@ -96,6 +96,9 @@ extension RightPannelView {
                 Text("\(Int(incrementRange.upperBound))")
                     .font(Font.title3.bold())
             }
+            Toggle("Always promote to queen", isOn: $gameSettings.autoQueen)
+                .toggleStyle(SwitchToggleStyle(tint: .blue))
+                .frame(maxWidth: .infinity)
         }
         .font(Font.title3.bold())
     }

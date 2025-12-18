@@ -38,6 +38,10 @@ struct StateAlertView: View {
                 Text("by \(reason.description.lowercased())")
                     .foregroundStyle(.secondary)
                     .font(.title)
+            } else if case let .timeout(winner) = state {
+                Text("\(winner == .white ? "black" : "white") run out of time")
+                    .foregroundStyle(.secondary)
+                    .font(.title)
             }
             
             HStack {

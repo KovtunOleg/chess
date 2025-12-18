@@ -86,6 +86,7 @@ class GameSettings: Identifiable {
     var gameType: GameType
     var level: GameLevel
     var timeControl: TimeControl
+    var autoQueen: Bool
     
     func playerCanMove(_ color: Piece.Color) -> Bool {
         switch gameType.mode {
@@ -106,15 +107,16 @@ class GameSettings: Identifiable {
         "settings"
     }
     
-    init(gameType: GameType, level: GameLevel, timeControl: TimeControl) {
+    init(gameType: GameType, level: GameLevel, timeControl: TimeControl, autoQueening: Bool) {
         self.gameType = gameType
         self.level = level
         self.timeControl = timeControl
+        self.autoQueen = autoQueening
     }
 }
 
 extension GameSettings {
-    static let `default`: GameSettings = .init(gameType: .default, level: .default, timeControl: .default)
+    static let `default`: GameSettings = .init(gameType: .default, level: .default, timeControl: .default, autoQueening: false)
 }
 
 extension GameSettings.GameType {
