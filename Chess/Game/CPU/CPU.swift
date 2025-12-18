@@ -12,12 +12,18 @@ final class CPU {
     
     /// returns position evaluation at the given `depth` and the best moves line
     func search(game: Game, gameSettings: GameSettings) async -> (Int, [Notation.Move])? {
-        task = Task {
+        task = Task(priority: .high) {
             let averageMovesCount = 40 // approximately
             let timePerMove = DispatchTimeInterval.milliseconds( Int((gameSettings.timeControl.time * Double(secondsInMinute) / Double(averageMovesCount))) * millisecondsInSecond )
-            return await dfs(game: game, depth: gameSettings.level.depth, until: DispatchTime.now().advanced(by: timePerMove))
+            let until = DispatchTime.now().advanced(by: timePerMove)
+            var best: (Int, [Notation.Move])?
+            for depth in GameSettings.GameLevel.easy.depth...gameSettings.level.depth {
+                let current = await dfs(game: game, depth: depth, until: depth > GameSettings.GameLevel.easy.depth ? until : .distantFuture)
+                guard let current else { break }
+                best = current
+            }
+            return best
         }
-        task?.escalatePriority(to: .high)
         return await task?.value
     }
     
@@ -35,11 +41,11 @@ extension CPU {
                      beta: Int = Int.max,
                      moves: [Notation.Move] = []) async -> (Int, [Notation.Move])? {
         await Task {
-            guard let task, !task.isCancelled else { return nil }
+            guard let task, !task.isCancelled, until > DispatchTime.now() else { return nil }
             switch game.notation.state {
             case .draw: return (0, moves)
             case let .mate(winner): return (winner == .white ? Int.max : Int.min, moves)
-            default: guard depth > 0, until > DispatchTime.now() else { return (evaluate(game: game), moves) }
+            default: guard depth > 0 else { return (evaluate(game: game), moves) }
             }
             var alpha = alpha, beta = beta
             var bestScore: Int, bestMoves = [Notation.Move]()

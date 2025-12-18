@@ -13,6 +13,7 @@ import SwiftUI
 struct RightPannelView: View {
     @Binding private(set) var game: Game
     @Environment(\.gameSettings) var gameSettings
+    @Environment(\.soundManager) var soundManager
     
     var state: Notation.State { game.notation.state }
     var moves: [Notation.Move] { game.notation.moves }
@@ -40,7 +41,13 @@ extension RightPannelView {
     @ViewBuilder
     private func buttonsView() -> some View {
         Button(action: {
-            state.canStart ? start() : reset()
+            if state.canStart {
+                start()
+                soundManager?.play(.gameStart)
+            } else {
+                reset()
+                soundManager?.play(.notify)
+            }
         }) {
             Text(state.canStart ? "Start" : "Reset")
                 .font(.title.bold())

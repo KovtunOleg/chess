@@ -9,6 +9,14 @@ import Combine
 import Observation
 import SwiftUI
 
+protocol GameProtocol {
+    func move(_ piece: Piece, to destination: Square, force: Bool, needToUpdateNotation: Bool) async -> Notation.Move?
+    func undo(for resetPiece: Piece?)
+    func start() async
+    func square(at position: Position) -> Square
+    func moves(for piece: Piece) async -> [Position]
+}
+
 @Observable
 final class Game: Equatable, Identifiable {
     static func == (lhs: Game, rhs: Game) -> Bool {
@@ -32,7 +40,9 @@ final class Game: Equatable, Identifiable {
         self.board = board
         self.notation = notation
     }
-    
+}
+
+extension Game: GameProtocol {
     @discardableResult
     func move(_ piece: Piece, to destination: Square, force: Bool = false, needToUpdateNotation: Bool = true) async -> Notation.Move? {
         if !force {

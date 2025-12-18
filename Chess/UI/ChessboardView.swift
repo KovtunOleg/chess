@@ -17,6 +17,7 @@ struct ChessboardView: View {
     
     @Binding private(set) var game: Game
     @Environment(\.gameSettings) var gameSettings
+    @Environment(\.soundManager) var soundManager
     @State private var moves: [Position]?
     @State private var selected: Piece? {
         didSet {
@@ -86,6 +87,7 @@ struct ChessboardView: View {
                     stateAlert = nil
                 }
                 .task {
+                    soundManager?.play(.gameEnd)
                     stopTimer()
                     stopCPU()
                 }
@@ -353,7 +355,8 @@ extension ChessboardView {
         Task {
             guard selected != nil else { return }
             selected = nil
-            await game.move(piece, to: square)
+            guard await game.move(piece, to: square) == nil else { return }
+            soundManager?.play(.illegal)
         }
     }
     
@@ -400,6 +403,9 @@ extension ChessboardView {
     private func resetGame() {
         game.onPromote = { pawn, position in
             Task {
+                defer {
+                    soundManager?.play(.capture)
+                }
                 guard gameSettings.playerCanMove(pawn.color) && !gameSettings.autoQueen else { return Piece(color: pawn.color, type: .queen) } // for CPU default to queen
                 promoted = (pawn, position)
                 while promoted?.piece.type == .pawn {
@@ -429,6 +435,7 @@ extension ChessboardView {
     private func update(_ notation: Notation) {
         switch notation.state {
         case .check, .mate:
+            soundManager?.play(.check)
             if case let .mate(winner) = notation.state {
                 stateAlert = .mate(winner)
             }
@@ -442,18 +449,24 @@ extension ChessboardView {
         switch notation.move {
         case let .move(piece, position, captured, _):
             lastMove = (from: piece.position!, to: position)
-            guard let captured else { return }
-            switch game.turn {
-            case .black:
-                var sorted = capturedPieces.white
-                sorted.insert(captured)
-                capturedPieces = (black: capturedPieces.black, white: sorted)
-            case .white:
-                var sorted = capturedPieces.black
-                sorted.insert(captured)
-                capturedPieces = (black: sorted, white: capturedPieces.white)
+            if let captured {
+                soundManager?.play(.capture)
+                switch game.turn {
+                case .black:
+                    var sorted = capturedPieces.white
+                    sorted.insert(captured)
+                    capturedPieces = (black: capturedPieces.black, white: sorted)
+                case .white:
+                    var sorted = capturedPieces.black
+                    sorted.insert(captured)
+                    capturedPieces = (black: sorted, white: capturedPieces.white)
+                }
+            } else {
+                soundManager?.play(.move)
             }
+            
         case let .castle(king, _, newKingPosition, _, _):
+            soundManager?.play(.castle)
             lastMove = (from: king.position!, to: newKingPosition)
         case .unknown:
             lastMove = nil
