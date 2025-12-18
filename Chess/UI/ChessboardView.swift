@@ -13,6 +13,7 @@ struct ChessboardView: View {
     private typealias Move = (from: Position, to: Position)
     private typealias Promoted = (piece: Piece, position: Position)
     private typealias Time = (black: Double, white: Double)
+    private typealias CapturedPieces = (black: SortedArray<Piece>, white: SortedArray<Piece>)
     
     @Binding private(set) var game: Game
     @Environment(\.gameSettings) var gameSettings
@@ -34,6 +35,7 @@ struct ChessboardView: View {
     @State private var checked: Piece?
     @State private var lastMove: Move?
     @State private var stateAlert: StateAlert?
+    @State private var capturedPieces: CapturedPieces = (black: SortedArray([]), white: SortedArray([]))
     @State private var cpu = CPU()
     @State private var timer: Timer?
     @State private var time: Time?
@@ -46,14 +48,14 @@ struct ChessboardView: View {
     var body: some View {
         GeometryReader { geometry in
             let annotationSize = 20.0
-            let clockSize: CGFloat = 40.0
+            let sideSize: CGFloat = 40.0
             let size = min(geometry.size.width, geometry.size.height)
-            let boardSize = size - annotationSize - 2 * clockSize
+            let boardSize = size - annotationSize - 2 * sideSize
             let squareSize = boardSize / CGFloat(Game.size)
             let rotate = gameSettings.rotateBoard
             VStack(spacing: 0) {
-                timerView(color: rotate ? .white : .black)
-                    .frame(height: clockSize)
+                sideView(color: rotate ? .white : .black)
+                    .frame(width: boardSize + annotationSize, height: sideSize)
                 HStack(spacing: 0) {
                     VStack(spacing: 0) {
                         rankAnnotationView()
@@ -72,10 +74,10 @@ struct ChessboardView: View {
                     }
                     .frame(width: boardSize + annotationSize, height: boardSize)
                 }
-                timerView(color: rotate ? .black : .white)
-                    .frame(height: clockSize)
+                sideView(color: rotate ? .black : .white)
+                    .frame(width: boardSize + annotationSize, height: sideSize)
             }
-            .frame(width: size, height: boardSize + annotationSize + 2 * clockSize)
+            .frame(width: size, height: boardSize + annotationSize + 2 * sideSize)
             .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
         }
         .sheet(item: $stateAlert) { item in
@@ -317,6 +319,32 @@ struct ChessboardView: View {
             .foregroundStyle(defaultState ? (total > criticalTime ? .black : .red) : .gray)
         }
     }
+    
+    @ViewBuilder
+    private func capturedPiecesView(color: Piece.Color) -> some View {
+        GeometryReader { geometry in
+            let size = geometry.size.height
+            let offset = size * 0.75
+            HStack {
+                let pieces = color == .white ? capturedPieces.white : capturedPieces.black
+                ForEach(pieces.elements, id: \.self) { piece in
+                    pieceView(for: piece, size: size)
+                        .shadow(color: color == .black ? .black : .white, radius: 1)
+                }
+                .padding(.leading, -offset)
+            }
+            .padding(.init(top: 0, leading: offset, bottom: 0, trailing: offset))
+        }
+    }
+    
+    @ViewBuilder
+    private func sideView(color: Piece.Color) -> some View {
+        HStack(spacing: 0) {
+            capturedPiecesView(color: color)
+                .frame(maxWidth: .infinity)
+            timerView(color: color)
+        }
+    }
 }
 
 extension ChessboardView {
@@ -411,8 +439,19 @@ extension ChessboardView {
             checked = nil
         }
         switch notation.move {
-        case let .move(piece, position, _, _):
+        case let .move(piece, position, captured, _):
             lastMove = (from: piece.position!, to: position)
+            guard let captured else { return }
+            switch game.turn {
+            case .black:
+                var sorted = capturedPieces.white
+                sorted.insert(captured)
+                capturedPieces = (black: capturedPieces.black, white: sorted)
+            case .white:
+                var sorted = capturedPieces.black
+                sorted.insert(captured)
+                capturedPieces = (black: sorted, white: capturedPieces.white)
+            }
         case let .castle(king, _, newKingPosition, _, _):
             lastMove = (from: king.position!, to: newKingPosition)
         case .unknown:

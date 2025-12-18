@@ -41,6 +41,13 @@ class Piece {
     }
 }
 
+extension Piece: Comparable {
+    static let order: [Piece.`Type`] = [.pawn, .knight, .bishop, .rook, .queen, .king]
+    static func < (lhs: Piece, rhs: Piece) -> Bool {
+        Self.order.firstIndex(of: lhs.type)! < Self.order.firstIndex(of: rhs.type)!
+    }
+}
+
 extension Piece {
     enum `Type`: Hashable, CustomStringConvertible {
         case king, queen, rook, bishop, knight, pawn
