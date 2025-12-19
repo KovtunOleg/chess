@@ -65,6 +65,14 @@ class GameSettings: Identifiable {
                 case .rapid: return "Rapid"
                 }
             }
+            
+            var icon: ImageResource {
+                switch self {
+                case .bullet: return .bullet
+                case .blitz: return .blitz
+                case .rapid: return .rapid
+                }
+            }
         }
         
         var mode = Mode.blitz

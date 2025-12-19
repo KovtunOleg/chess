@@ -82,9 +82,14 @@ extension RightPannelView {
             CustomPicker(selection: $gameSettings.timeControl.mode, segments: GameSettings.TimeControl.Mode.allCases) { mode in
                 VStack(spacing: 0) {
                     let description = GameSettings.TimeControl(mode: mode, increment: gameSettings.timeControl.increment).description.split(separator: "|")
-                    Text(description[0])
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 25)
+                    Label {
+                        Text(description[0])
+                    } icon: {
+                        Image(mode.icon)
+                            .resizable()
+                            .scaledToFit()
+                    }
+                    .frame(height: 25)
                     Text(description[1])
                         .font(Font.caption)
                         .frame(maxWidth: .infinity)
