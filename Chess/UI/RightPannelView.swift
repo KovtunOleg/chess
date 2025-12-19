@@ -6,7 +6,6 @@
 //
 
 import Combine
-import Flow
 import SwiftUI
 
 @MainActor
@@ -113,22 +112,22 @@ extension RightPannelView {
     @ViewBuilder
     private func notationView() -> some View {
         ScrollView {
-            HStack {
-                HFlow(horizontalAlignment: .leading, verticalAlignment: .top) {
-                    ForEach(moves.chunked(into: 2).enumerated(), id: \.offset) { (i, fullMove) in
-                        if fullMove.first != .unknown {
-                            HStack {
-                                ForEach(fullMove.enumerated(), id: \.offset) { (j, move) in
-                                    let isLastMove = (i * 2 + j) + 1 == moves.count
-                                    Text((j == 0 ? "\(i + 1). " : "") + move.description + (isLastMove ? state.description : ""))
-                                        .font(.system(size: 14, weight: isLastMove ? .semibold : .regular))
-                                }
-                            }
+            let attributedText = {
+                var attributedString = AttributedString("")
+                for (i, fullMove) in moves.chunked(into: 2).enumerated() {
+                    if fullMove.first != .unknown {
+                        for (j, move) in fullMove.enumerated() {
+                            let isLastMove = (i * 2 + j) + 1 == moves.count
+                            var attributedMove = AttributedString((j == 0 ? "\(i + 1). " : "") + move.description + " " + (isLastMove ? state.description : ""))
+                            attributedMove.font = .system(size: 14, weight: isLastMove ? .semibold : .regular)
+                            attributedString.append(attributedMove)
                         }
                     }
                 }
-                Spacer()
-            }
+                return attributedString
+            }()
+            Text(attributedText)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .defaultScrollAnchor(.bottom, for: .sizeChanges)
         .padding(4)

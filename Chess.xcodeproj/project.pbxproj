@@ -6,10 +6,6 @@
 	objectVersion = 77;
 	objects = {
 
-/* Begin PBXBuildFile section */
-		63BE28D02EEC53C200D9AC87 /* Flow in Frameworks */ = {isa = PBXBuildFile; productRef = 63BE28CF2EEC53C200D9AC87 /* Flow */; };
-/* End PBXBuildFile section */
-
 /* Begin PBXContainerItemProxy section */
 		63D3AFC32EDD842D0098BD51 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -66,7 +62,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				63BE28D02EEC53C200D9AC87 /* Flow in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -119,7 +114,6 @@
 			);
 			name = Chess;
 			packageProductDependencies = (
-				63BE28CF2EEC53C200D9AC87 /* Flow */,
 			);
 			productName = Chess;
 			productReference = 63D3AFB52EDD842B0098BD51 /* Chess.app */;
@@ -174,7 +168,6 @@
 			mainGroup = 63D3AFAC2EDD842B0098BD51;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				63BE28CE2EEC53C200D9AC87 /* XCRemoteSwiftPackageReference "SwiftUI-Flow" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 63D3AFB62EDD842B0098BD51 /* Products */;
@@ -487,25 +480,6 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
-
-/* Begin XCRemoteSwiftPackageReference section */
-		63BE28CE2EEC53C200D9AC87 /* XCRemoteSwiftPackageReference "SwiftUI-Flow" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/tevelee/SwiftUI-Flow";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 3.1.1;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		63BE28CF2EEC53C200D9AC87 /* Flow */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 63BE28CE2EEC53C200D9AC87 /* XCRemoteSwiftPackageReference "SwiftUI-Flow" */;
-			productName = Flow;
-		};
-/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 63D3AFAD2EDD842B0098BD51 /* Project object */;
 }

@@ -100,7 +100,10 @@ struct Notation {
         self.positions = positions
         self.positionsCount = positions.reduce(into: [:]) { $0[$1, default: 0] += 1 }
     }
-    
+}
+
+// MARK: Public interface
+extension Notation {
     mutating func update(with move: Move? = nil, state: State, position: String) {
         if let move { moves.append(move) }
         states.append(state)
