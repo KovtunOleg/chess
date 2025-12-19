@@ -5,7 +5,6 @@
 //  Created by Oleg Kovtun on 18.12.2025.
 //
 
-
 struct SortedArray<Element: Comparable & Hashable> {
     private(set) var elements: [Element]
     var isEmpty: Bool { elements.isEmpty }

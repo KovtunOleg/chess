@@ -8,20 +8,28 @@
 import Foundation
 
 final class CPU {
+    typealias Line = (Int, [Notation.Move])
     private var task: Task<(Int, [Notation.Move])?, Never>?
     
     /// returns position evaluation at the given `depth` and the best moves line
-    func search(game: Game, gameSettings: GameSettings) async -> (Int, [Notation.Move])? {
+    func search(game: Game, gameSettings: GameSettings) async -> Line? {
         task = Task(priority: .high) {
+            let line = await useOpeningsBook(game: game.copy)
+            guard line == nil else { return line }
             let averageMovesCount = 40 // approximately
             let timePerMove = DispatchTimeInterval.milliseconds( Int((gameSettings.timeControl.time * Double(secondsInMinute) / Double(averageMovesCount))) * millisecondsInSecond )
             let until = DispatchTime.now().advanced(by: timePerMove)
-            var best: (Int, [Notation.Move])?
+            var best: Line?
             for depth in GameSettings.GameLevel.easy.depth...gameSettings.level.depth {
-                let current = await dfs(game: game, depth: depth, until: depth > GameSettings.GameLevel.easy.depth ? until : .distantFuture)
+                let current = await dfs(game: game.copy, depth: depth, until: depth > GameSettings.GameLevel.easy.depth ? until : .distantFuture)
                 guard let current else { break }
+                guard until > DispatchTime.now() else {
+                    best = best == nil ? current : best
+                    break
+                }
                 best = current
             }
+            guard let task, !task.isCancelled else { return nil }
             return best
         }
         return await task?.value
@@ -39,13 +47,13 @@ extension CPU {
                      until: DispatchTime,
                      alpha: Int = Int.min,
                      beta: Int = Int.max,
-                     moves: [Notation.Move] = []) async -> (Int, [Notation.Move])? {
+                     moves: [Notation.Move] = []) async -> Line? {
         await Task {
-            guard let task, !task.isCancelled, until > DispatchTime.now() else { return nil }
+            guard let task, !task.isCancelled else { return nil }
             switch game.notation.state {
             case .draw: return (0, moves)
             case let .mate(winner): return (winner == .white ? Int.max : Int.min, moves)
-            default: guard depth > 0 else { return (evaluate(game: game), moves) }
+            default: guard depth > 0, until > DispatchTime.now() else { return (evaluate(game: game), moves) }
             }
             var alpha = alpha, beta = beta
             var bestScore: Int, bestMoves = [Notation.Move]()
@@ -116,5 +124,14 @@ extension CPU {
             let rhsValue = Piece(color: rhsPiece.color, type: rhsPiece.type, position: rhsPosition).value
             return lhsValue - lhsPiece.value > rhsValue - rhsPiece.value
         }
+    }
+    
+    private func useOpeningsBook(game: Game) async -> Line? {
+        guard let children = game.notation.openingTrie?.children,
+              let opening = children.randomElement(),
+              let move = await PGNParser.parseMove(game: game, move: opening.key, force: true) else {
+            return nil
+        }
+        return (0, [move])
     }
 }

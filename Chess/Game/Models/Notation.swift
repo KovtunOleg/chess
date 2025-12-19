@@ -76,6 +76,7 @@ struct Notation {
     private(set) var states: [State]
     private(set) var positionsCount: [String: Int]
     private(set) var positions: [String]
+    private(set) var openingTrie: OpeningsTrie? = OpeningsTrie.shared
     private var defaultState = State.idle
     private var defaultLastActiveMoveIndex = 0
     
@@ -83,6 +84,7 @@ struct Notation {
     var fullMoves: Int { Int((Double(halfMoves) / 2.0).rounded(.up)) }
     var state: State { states.last ?? defaultState }
     var move: Move { moves.last ?? .unknown }
+    var openingTitle: String? { openingTrie?.title }
     
     var lastActiveMoveIndex: Int {
         let index = moves.lastIndex { move in
@@ -104,11 +106,12 @@ struct Notation {
 
 // MARK: Public interface
 extension Notation {
-    mutating func update(with move: Move? = nil, state: State, position: String) {
+    mutating func update(with move: Move? = nil, state: State, position: String, opening: OpeningsTrie?) {
         if let move { moves.append(move) }
         states.append(state)
         positions.append(position)
         positionsCount[position, default: 0] += 1
+        openingTrie = opening ?? openingTrie
     }
     
     mutating func undo() -> Move? {
@@ -117,6 +120,9 @@ extension Notation {
         states.removeLast()
         let position = positions.removeLast()
         positionsCount[position, default: 0] -= 1
+        if (openingTrie?.movesCount ?? 0) < moves.count {
+            openingTrie = openingTrie?.parent
+        }
         return move
     }
     

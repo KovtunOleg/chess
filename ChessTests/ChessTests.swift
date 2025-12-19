@@ -9,36 +9,46 @@ import Testing
 import XCTest
 @testable import Chess
 
-struct TestPosition: Equatable, Codable {
-    enum ParsingError: LocalizedError, CustomStringConvertible {
-        var description: String {
-            switch self {
-            case let .missingFile(fileName): return "Missing file: \(fileName).json"
-            case let .wrongFormat(error): return "File has wrong format: \(error)"
-            }
+enum ParsingError: LocalizedError, CustomStringConvertible {
+    var description: String {
+        switch self {
+        case let .missingFile(fileName): return "Missing file: \(fileName).json"
+        case let .wrongFormat(error): return "File has wrong format: \(error)"
         }
-        
-        case missingFile(String)
-        case wrongFormat(String)
     }
     
+    case missingFile(String)
+    case wrongFormat(String)
+}
+
+struct TestPosition: Equatable, Codable {
     let fen: String
+    let movesCount: Int
+    let state: Notation.State
+}
+
+struct TestGame: Equatable, Codable {
+    let pgn: String
+    let name: String
+    let opening: String
     let movesCount: Int
     let state: Notation.State
 }
 
 @MainActor
 class ChessTests {
-    @Test("Test game states for given positions") func positions() async throws {
+    private static let FENPositionsFileName = "test_fen_positions"
+    private static let PGNGamesFileName = "test_pgn_games"
+    
+    @Test("Test game states for given FEN positions") func FENpositions() async throws {
         do {
-            let positions = try getTestPositions()
             var game: Game
-            for position in positions {
-                game = try FENParser.parse(fen: position.fen)
+            for testPosition: TestPosition in try getJSONData(fileName: ChessTests.FENPositionsFileName) {
+                game = try FENParser.parse(fen: testPosition.fen)
                 await game.start()
                 let movesCount = await getMovesCount(from: game)
-                #expect(movesCount == position.movesCount, "\(position.fen)")
-                #expect(game.notation.state == position.state, "\(position.fen)")
+                #expect(movesCount == testPosition.movesCount, "\(testPosition.fen)")
+                #expect(game.notation.state == testPosition.state, "\(testPosition.fen)")
             }
         } catch {
             #expect(Bool(false), "\(error.localizedDescription)")
@@ -63,18 +73,31 @@ class ChessTests {
             #expect(Bool(false), "\(error.localizedDescription)")
         }
     }
+    
+    @Test("Test PGN games") func PGNGames() async throws {
+        do {
+            for testGame: TestGame in try getJSONData(fileName: ChessTests.PGNGamesFileName) {
+                let game = try await PGNParser.parse(pgn: testGame.pgn)
+                #expect(game.notation.fullMoves == testGame.movesCount, "\(testGame.name)")
+                #expect(game.notation.state == testGame.state, "\(testGame.name)")
+                #expect(game.notation.openingTitle == testGame.opening, "\(testGame.name)")
+                #expect(String(await PGNParser.parse(game: game).characters[...]) == testGame.pgn, "\(testGame.name)")
+            }
+        } catch {
+            #expect(Bool(false), "\(error.localizedDescription)")
+        }
+    }
 }
 
 extension ChessTests {
-    private func getTestPositions() throws -> [TestPosition] {
-        let fileName = "test_positions"
+    private func getJSONData<T: Codable>(fileName: String) throws -> [T] {
         guard let fileURL = Bundle(for: ChessTests.self).url(forResource: fileName, withExtension: "json") else {
-            throw TestPosition.ParsingError.missingFile(fileName)
+            throw ParsingError.missingFile(fileName)
         }
         do {
-            return try JSONDecoder().decode([TestPosition].self, from: try Data(contentsOf: fileURL))
+            return try JSONDecoder().decode([T].self, from: try Data(contentsOf: fileURL))
         } catch {
-            throw TestPosition.ParsingError.wrongFormat(error.localizedDescription)
+            throw ParsingError.wrongFormat(error.localizedDescription)
         }
     }
     

@@ -26,7 +26,8 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				ChessTests.swift,
-				test_positions.json,
+				test_fen_positions.json,
+				test_pgn_games.json,
 			);
 			target = 63D3AFB42EDD842B0098BD51 /* Chess */;
 		};
@@ -34,7 +35,8 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				ChessTests.swift,
-				test_positions.json,
+				test_fen_positions.json,
+				test_pgn_games.json,
 			);
 			target = 63D3AFC12EDD842D0098BD51 /* ChessTests */;
 		};

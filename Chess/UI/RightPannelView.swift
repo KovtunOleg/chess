@@ -14,8 +14,11 @@ struct RightPannelView: View {
     @Environment(\.gameSettings) var gameSettings
     @Environment(\.soundManager) var soundManager
     
-    var state: Notation.State { game.notation.state }
-    var moves: [Notation.Move] { game.notation.moves }
+    @State private var attributedText: AttributedString?
+    @State private var notationCancellable: AnyCancellable?
+    
+    private var state: Notation.State { game.notation.state }
+    private var openingTitle: String? { game.notation.openingTitle }
     
     var body: some View {
         ZStack {
@@ -118,22 +121,16 @@ extension RightPannelView {
     @ViewBuilder
     private func notationView() -> some View {
         ScrollView {
-            let attributedText = {
-                var attributedString = AttributedString("")
-                for (i, fullMove) in moves.chunked(into: 2).enumerated() {
-                    if fullMove.first != .unknown {
-                        for (j, move) in fullMove.enumerated() {
-                            let isLastMove = (i * 2 + j) + 1 == moves.count
-                            var attributedMove = AttributedString((j == 0 ? "\(i + 1). " : "") + move.description + " " + (isLastMove ? state.description : ""))
-                            attributedMove.font = .system(size: 14, weight: isLastMove ? .semibold : .regular)
-                            attributedString.append(attributedMove)
-                        }
-                    }
-                }
-                return attributedString
-            }()
-            Text(attributedText)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            if let openingTitle {
+                Text(openingTitle)
+                    .font(.caption)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if let attributedText {
+                Text(attributedText)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
         .defaultScrollAnchor(.bottom, for: .sizeChanges)
         .padding(4)
@@ -144,7 +141,13 @@ extension RightPannelView {
     private func reset() {
         do {
             game = try FENParser.parse(fen: FENParser.startPosition)
-
+            notationCancellable = game.notationPublisher
+                .sink { _ in
+                    Task {
+                        attributedText = await PGNParser.parse(game: game)
+                    }
+                }
+            
         } catch {
             guard error is FENParser.ParsingError else { print("Unknown error"); return }
             print("Invalid FEN format")

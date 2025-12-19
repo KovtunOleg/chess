@@ -53,8 +53,8 @@ final class FENParser {
         var enPassantMoves = [Notation.Move]()
         if enPassant != "-" {
             let pawnPosition = Position(
-                rank: Int("\(enPassant.last ?? "0")") ?? 0,
-                file: Int(UnicodeScalar("\(enPassant.first ?? "a")")!.value - UnicodeScalar("a").value))
+                rank: (enPassant.last ?? "1").rankInt + 1,
+                file: (enPassant.first ?? "a").fileInt)
             if let pawn = pieces.first(where: {
                 $0.type == .pawn && $0.color != activeColor && $0.position == pawnPosition
             }) {

@@ -49,7 +49,9 @@ extension Piece: Comparable {
 }
 
 extension Piece {
-    enum `Type`: Hashable, CustomStringConvertible {
+    static let pgnMap = `Type`.allCases.reduce(into: [:]) { $0[$1.description] = $1 }
+    
+    enum `Type`: Hashable, CustomStringConvertible, CaseIterable {
         case king, queen, rook, bishop, knight, pawn
         
         var description: String {
@@ -86,6 +88,16 @@ extension Piece: CustomStringConvertible {
     var description: String {
         guard let position else { return type.description }
         return "\(type.description)\(position.description)"
+    }
+    
+    func description(shortenFile: Bool, shortenRank: Bool) -> String {
+        guard let position, shortenFile || shortenRank else { return description }
+        var description = type.description
+        if shortenFile || shortenRank {
+            if !shortenFile { description += position.file.fileString }
+            if !shortenRank { description += position.rank.rankString }
+        }
+        return description
     }
 }
 

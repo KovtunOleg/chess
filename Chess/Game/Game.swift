@@ -26,7 +26,6 @@ final class Game: Equatable, Identifiable {
     }
     
     var turn: Piece.Color { notation.halfMoves % 2 == 0 ? .white : .black }
-    var onPromote: ((Piece, Position) -> Task<Piece, Never>)? // default to queen
     
     init(board: [[Square]] = [[Square]].empty, notation: Notation = Notation()) {
         self.board = board
@@ -37,7 +36,7 @@ final class Game: Equatable, Identifiable {
 // MARK: Public interface
 extension Game {
     @discardableResult
-    func move(_ piece: Piece, to destination: Square, force: Bool = false, needToUpdateNotation: Bool = true) async -> Notation.Move? {
+    func move(_ piece: Piece, to destination: Square, onPromote: ((Piece, Position) -> Task<Piece?, Never>)? = nil, force: Bool = false, needToUpdateNotation: Bool = true) async -> Notation.Move? {
         if !force {
             let moves = await moves(for: piece)
             guard moves.contains(destination.position) else { return nil }
@@ -276,7 +275,11 @@ extension Game {
             guard let drawReason = isDraw(isCheck: false, hasMoves: hasMoves, position: position, color: opponentColor) else { return .play }
             return .draw(reason: drawReason)
         }()
-        notation.update(with: move, state: state, position: position)
+        let opening: OpeningsTrie? = await {
+            guard let move else { return nil }
+            return notation.openingTrie?.children[await PGNParser.parseMove(game: self, move: move)]
+        }()
+        notation.update(with: move, state: state, position: position, opening: opening)
         notationPublisher.send(notation)
     }
 }

@@ -38,8 +38,8 @@ struct ChessboardView: View {
     @State private var stateAlert: StateAlert?
     @State private var capturedPieces: CapturedPieces = (black: SortedArray([]), white: SortedArray([]))
     @State private var cpu = CPU()
-    @State private var timer: Timer?
     @State private var time: Time?
+    @State private var timerCancellable: AnyCancellable?
     @State private var notationCancellable: AnyCancellable?
     
     private var state: Notation.State { game.notation.state }
@@ -303,7 +303,7 @@ struct ChessboardView: View {
             let seconds = Int(total.truncatingRemainder(dividingBy: Double(secondsInMinute)))
             let milliseconds = Int((total - Double(minutes) * Double(secondsInMinute) - Double(seconds)) * 100.0)
             let format = "%02d"
-            let defaultState = game.turn == color && timer != nil
+            let defaultState = game.turn == color && timerCancellable != nil
             let criticalTime = 20.0
             Label {
                 HStack(alignment: .bottom, spacing: 0) {
@@ -355,7 +355,21 @@ extension ChessboardView {
         Task {
             guard selected != nil else { return }
             selected = nil
-            guard await game.move(piece, to: square) == nil else { return }
+            guard await game.move(piece, to: square, onPromote: { pawn, position in
+                Task {
+                    defer {
+                        soundManager?.play(.capture)
+                    }
+                    guard gameSettings.playerCanMove(pawn.color) && !gameSettings.autoQueen else { return nil } // default to queen
+                    promoted = (pawn, position)
+                    while promoted?.piece.type == .pawn {
+                        try? await Task.sleep(for: .milliseconds(1))
+                    }
+                    let copy = promoted?.piece.copy
+                    promoted = nil
+                    return copy ?? pawn
+                }
+            }) == nil else { return }
             soundManager?.play(.illegal)
         }
     }
@@ -363,7 +377,7 @@ extension ChessboardView {
     func cpuMoveIfNeeded() {
         guard !gameSettings.playerCanMove(game.turn) else { return }
         Task {
-            guard let (_, moves) = await cpu.search(game: game.copy, gameSettings: gameSettings) else { return }
+            guard let (_, moves) = await cpu.search(game: game, gameSettings: gameSettings) else { return }
             var piece: Piece?, square: Square?
             switch moves.first {
             case let .move(_piece, position, _, _):
@@ -401,21 +415,6 @@ extension ChessboardView {
     }
     
     private func resetGame() {
-        game.onPromote = { pawn, position in
-            Task {
-                defer {
-                    soundManager?.play(.capture)
-                }
-                guard gameSettings.playerCanMove(pawn.color) && !gameSettings.autoQueen else { return Piece(color: pawn.color, type: .queen) } // for CPU default to queen
-                promoted = (pawn, position)
-                while promoted?.piece.type == .pawn {
-                    try? await Task.sleep(for: .milliseconds(1))
-                }
-                let copy = promoted?.piece.copy
-                promoted = nil
-                return copy ?? pawn
-            }
-        }
         notationCancellable = game.notationPublisher
             .sink { notation in
                 update(notation)
@@ -476,7 +475,7 @@ extension ChessboardView {
     // MARK: Timer
     private func tick() {
         guard !game.notation.moves.isEmpty else { return }
-        if timer == nil {
+        if timerCancellable == nil {
             runTimer()
         }
         guard let time else { return }
@@ -490,8 +489,9 @@ extension ChessboardView {
     
     private func runTimer() {
         let timeInterval = 0.01
-        timer = Timer.scheduledTimer(withTimeInterval: timeInterval, repeats: true) { timer in
-            Task { @MainActor in
+        timerCancellable = Timer.TimerPublisher(interval: timeInterval, runLoop: .main, mode: .common)
+            .autoconnect()
+            .sink { _ in
                 guard let time else { return }
                 switch game.turn {
                 case .white:
@@ -504,12 +504,11 @@ extension ChessboardView {
                     stateAlert = .timeout(.white)
                 }
             }
-        }
     }
     
     private func stopTimer() {
-        timer?.invalidate()
-        timer = nil
+        timerCancellable?.cancel()
+        timerCancellable = nil
     }
     
     private func stopCPU() {

@@ -33,3 +33,13 @@ extension Int {
         return String(UnicodeScalar(letter)!)
     }
 }
+
+extension Character {
+    var rankInt: Int {
+        (Int("\(self)") ?? 1) - 1
+    }
+    
+    var fileInt: Int {
+        Int(UnicodeScalar("\(self)")!.value - UnicodeScalar("a").value)
+    }
+}

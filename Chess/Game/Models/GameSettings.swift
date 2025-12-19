@@ -7,10 +7,6 @@
 
 import SwiftUI
 
-protocol GameSettingsProtocol {
-    static func read() -> GameSettings
-}
-
 @Observable
 class GameSettings: Identifiable, Codable {
     struct GameType: Hashable, CustomStringConvertible, Codable {
@@ -79,8 +75,8 @@ class GameSettings: Identifiable, Codable {
             }
         }
         
-        var mode = Mode.blitz
-        var increment = 0.0
+        var mode: Mode
+        var increment: Double
         
         var time: CGFloat {
             switch mode {
@@ -98,13 +94,13 @@ class GameSettings: Identifiable, Codable {
     var gameType: GameType {
         didSet { GameSettings.save(self) }
     }
-    var level: GameLevel = .medium {
+    var level: GameLevel {
         didSet { GameSettings.save(self) }
     }
-    var timeControl: TimeControl = .default {
+    var timeControl: TimeControl {
         didSet { GameSettings.save(self) }
     }
-    var autoQueen: Bool = false {
+    var autoQueen: Bool {
         didSet { GameSettings.save(self) }
     }
     
@@ -117,6 +113,7 @@ class GameSettings: Identifiable, Codable {
     }
     
     var rotateBoard: Bool {
+        guard gameType.mode == .playerVsComputer else { return false }
         switch gameType.playerColor {
         case .white: return false
         case .black: return true
@@ -125,26 +122,38 @@ class GameSettings: Identifiable, Codable {
     
     var id: String { Self.key }
     
-    init(gameType: GameType, level: GameLevel, timeControl: TimeControl, autoQueening: Bool) {
+    init(gameType: GameType, level: GameLevel, timeControl: TimeControl, autoQueen: Bool) {
         self.gameType = gameType
         self.level = level
         self.timeControl = timeControl
-        self.autoQueen = autoQueening
+        self.autoQueen = autoQueen
+    }
+    
+    /*
+     A workaround to suppress the warning is to define a CodingKeys enum that includes all of the visible class properties,
+     leaving out the hidden _$observationRegistrar property.
+     */
+    enum CodingKeys: CodingKey {
+        case _gameType, _level, _timeControl, _autoQueen
     }
 }
 
-extension GameSettings: GameSettingsProtocol {
-    static let key = "settings"
+extension GameSettings {
+    static let shared = GameSettings.read()
+    
+    static let key = "game_settings"
     static private func save(_ settings: GameSettings) {
-        UserDefaults.standard.set(try? JSONEncoder().encode(settings), forKey: key)
+        Task {
+            UserDefaults.standard.set(try? JSONEncoder().encode(settings), forKey: key)
+        }
     }
     
-    static func read() -> GameSettings {
+    static private func read() -> GameSettings {
         guard let data = UserDefaults.standard.data(forKey: key), let settings = try? JSONDecoder().decode(Self.self, from: data) else {
             return .init(gameType: .default,
                          level: .default,
                          timeControl: .default,
-                         autoQueening: false)
+                         autoQueen: false)
         }
         return settings
     }
