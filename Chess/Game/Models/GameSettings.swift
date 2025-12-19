@@ -7,10 +7,14 @@
 
 import SwiftUI
 
+protocol GameSettingsProtocol {
+    static func read() -> GameSettings
+}
+
 @Observable
-class GameSettings: Identifiable {
-    struct GameType: Hashable, CustomStringConvertible {
-        enum Mode: Hashable, CaseIterable, CustomStringConvertible {
+class GameSettings: Identifiable, Codable {
+    struct GameType: Hashable, CustomStringConvertible, Codable {
+        enum Mode: Hashable, CaseIterable, CustomStringConvertible, Codable {
             case playerVsPlayer
             case playerVsComputer
             
@@ -30,7 +34,7 @@ class GameSettings: Identifiable {
         }
     }
     
-    enum GameLevel: Hashable, CaseIterable, CustomStringConvertible {
+    enum GameLevel: Hashable, CaseIterable, CustomStringConvertible, Codable {
         case easy
         case medium
         case hard
@@ -52,8 +56,8 @@ class GameSettings: Identifiable {
         }
     }
     
-    struct TimeControl: Hashable, CustomStringConvertible {
-        enum Mode: Hashable, CaseIterable, CustomStringConvertible {
+    struct TimeControl: Hashable, CustomStringConvertible, Codable {
+        enum Mode: Hashable, CaseIterable, CustomStringConvertible, Codable {
             case bullet
             case blitz
             case rapid
@@ -91,10 +95,18 @@ class GameSettings: Identifiable {
         }
     }
     
-    var gameType: GameType
-    var level: GameLevel
-    var timeControl: TimeControl
-    var autoQueen: Bool
+    var gameType: GameType {
+        didSet { GameSettings.save(self) }
+    }
+    var level: GameLevel = .medium {
+        didSet { GameSettings.save(self) }
+    }
+    var timeControl: TimeControl = .default {
+        didSet { GameSettings.save(self) }
+    }
+    var autoQueen: Bool = false {
+        didSet { GameSettings.save(self) }
+    }
     
     func playerCanMove(_ color: Piece.Color) -> Bool {
         switch gameType.mode {
@@ -111,9 +123,7 @@ class GameSettings: Identifiable {
         }
     }
     
-    var id: String {
-        "settings"
-    }
+    var id: String { Self.key }
     
     init(gameType: GameType, level: GameLevel, timeControl: TimeControl, autoQueening: Bool) {
         self.gameType = gameType
@@ -123,16 +133,31 @@ class GameSettings: Identifiable {
     }
 }
 
-extension GameSettings {
-    static let `default`: GameSettings = .init(gameType: .default, level: .default, timeControl: .default, autoQueening: false)
+extension GameSettings: GameSettingsProtocol {
+    static let key = "settings"
+    static private func save(_ settings: GameSettings) {
+        UserDefaults.standard.set(try? JSONEncoder().encode(settings), forKey: key)
+    }
+    
+    static func read() -> GameSettings {
+        guard let data = UserDefaults.standard.data(forKey: key), let settings = try? JSONDecoder().decode(Self.self, from: data) else {
+            return .init(gameType: .default,
+                         level: .default,
+                         timeControl: .default,
+                         autoQueening: false)
+        }
+        return settings
+    }
 }
 
 extension GameSettings.GameType {
-    static let `default`: GameSettings.GameType  = .init(mode: .playerVsPlayer, playerColor: .white)
+    static let `default`: GameSettings.GameType  = .init(mode: .playerVsPlayer,
+                                                         playerColor: .white)
 }
 
 extension GameSettings.TimeControl {
-    static let `default`: GameSettings.TimeControl = .init(mode: .blitz, increment: 0.0)
+    static let `default`: GameSettings.TimeControl = .init(mode: .blitz,
+                                                           increment: 0.0)
     static let incrementRange = 0.0...3.0
 }
 

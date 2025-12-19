@@ -88,6 +88,7 @@ extension RightPannelView {
                         Image(mode.icon)
                             .resizable()
                             .scaledToFit()
+                            .padding(2)
                     }
                     .frame(height: 25)
                     Text(description[1])

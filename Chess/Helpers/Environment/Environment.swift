@@ -8,6 +8,6 @@
 import SwiftUI
 
 extension EnvironmentValues {
-    @Entry var gameSettings = GameSettings.default
+    @Entry var gameSettings = GameSettings.read()
     @Entry var soundManager = SoundManager.shared
 }

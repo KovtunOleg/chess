@@ -26,7 +26,7 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: minBoardSize + minRightPannelSize, minHeight: minBoardSize)
-        .environment(\.gameSettings, GameSettings.default)
+        .environment(\.gameSettings, GameSettings.read())
         .environment(\.soundManager, SoundManager.shared)
     }
 }
