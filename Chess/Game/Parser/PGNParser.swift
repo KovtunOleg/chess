@@ -14,21 +14,27 @@ final class PGNParser {
     }
     
     static func parse(pgn: String) async throws -> Game {
-        let moves = parseMoves(pgn: pgn)
+        let data = parseMovesAndResult(pgn: pgn)
+        let (moves, result) = (data.moves, data.result)
         let game = try FENParser.parse(fen: FENParser.startPosition)
-        await game.start()
+        await game.start(with: result)
         for move in moves {
             guard await parseMove(game: game, move: move) != nil else { throw ParsingError.invalidPGNFormat(move) }
         }
         return game
     }
     
-    static func parseMoves(pgn: String) -> [String] {
-        pgn
-            .split(separator: "#")[0]
+    static func parseMovesAndResult(pgn: String) -> (moves: [String], result: [Int: String]?) {
+        let match = try? /(?<moves>.*?)(#? (?<result>(1\/2-1\/2|0-1|1-0)))?/.wholeMatch(in: pgn)
+        let moves = match?.moves
             .split(separator: " ")
             .map { String((try? /(\d+\.)?(?<move>.*?)\+?/.wholeMatch(in: $0))?.move ?? "") }
-            .filter { !$0.isEmpty }
+            .filter { !$0.isEmpty } ?? []
+        let result: [Int: String]? = {
+            guard let result = match?.result else { return nil }
+            return [moves.count: String(result)]
+        }()
+        return (moves, result)
     }
     
     static func parseMove(game: Game, move: String, force: Bool = false) async -> Notation.Move? {
@@ -70,32 +76,40 @@ final class PGNParser {
                       shorten: Bool = true) async -> AttributedString {
         let moves = game.notation.moves
         let states = game.notation.states
+        let result = game.notation.result
         var attributedString = AttributedString("")
         for (i, fullMove) in moves.chunked(into: 2).enumerated() {
             if fullMove.first != .unknown {
                 for (j, move) in fullMove.enumerated() {
                     let index = i * 2 + j + 1
                     let isLastMove = index == moves.count
-                    let moveDescription = await parseMove(game: game, move: move, shorten: shorten)
+                    let moveDescription = parseMove(game: game, move: move, shorten: shorten)
                     var attributedMove = AttributedString((j == 0 ? "\(i + 1).\u{00a0}" : "") + moveDescription + states[index].description + (isLastMove ? "": " "))
                     attributedMove.font = isLastMove ? lastMoveFont : font
                     attributedString.append(attributedMove)
                 }
             }
         }
+        if let result {
+            var attributedResult = AttributedString(" " + result)
+            attributedResult.font = lastMoveFont
+            attributedString.append(attributedResult)
+        }
         return attributedString
     }
     
-    static func parseMove(game: Game, move: Notation.Move, shorten: Bool = true) async -> String {
+    static func parseMove(game: Game, move: Notation.Move, shorten: Bool = true) -> String {
         var moveDescription = move.description
         guard shorten else { return moveDescription }
         switch move {
-        case let .move(piece, position, captured, _):
-            let similarPieces = game.board.pieces.filter { $0.color == piece.color && $0.type == piece.type && $0.position != piece.position }
+        case let .move(piece, _, captured, _, similarPieces):
             var shortenRank = true, shortenFile = !(captured != nil && piece.type == .pawn)
-            for similarPiece in similarPieces where await game.moves(for: similarPiece).contains(position) {
-                if similarPiece.position?.rank == piece.position?.rank { shortenRank = false }
-                if similarPiece.position?.file == piece.position?.file { shortenFile = false }
+            for similarPiece in similarPieces {
+                if similarPiece.position?.file != piece.position?.file {
+                    shortenFile = false
+                } else if similarPiece.position?.rank != piece.position?.rank {
+                    shortenRank = false
+                }
                 guard shortenRank || shortenFile else { break }
             }
             moveDescription.removeFirst(piece.description.count)

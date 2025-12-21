@@ -64,7 +64,7 @@ final class FENParser {
             }
         }
         
-        // 6. Fullmove Number
+        // 6. Complete Fullmove Number
         let fullMoves = Int(fenParts[5]) ?? 0
         
         // 5. Halfmove Clock
@@ -115,16 +115,16 @@ final class FENParser {
         // 4. Possible En Passant Targets
         parts[3] = "-"
         let moves = game.notation.moves
-        if case let .move(pawn, pawnPosition, _, _) = moves.last, let prevPawnPosition = pawn.position,
+        if case let .move(pawn, pawnPosition, _, _, _) = moves.last, let prevPawnPosition = pawn.position,
            pawn.type == .pawn, pawn.movesCount == 1, abs(prevPawnPosition.rank - pawnPosition.rank) == 2 {
             parts[3] = "\(pawnPosition.file.fileString)\((pawnPosition.rank == 3 ? 2 : 5).rankString)"
         }
         
         // 5. Halfmove Clock
-        parts[4] = game.notation.halfMoves.description
-        
-        // 6. Fullmove Number
-        parts[5] = game.notation.fullMoves.description
+        parts[4] = "\(game.notation.lastActiveMoveIndex)"
+
+        // 6. Complete Fullmove Number
+        parts[5] = "\(Int((Double(moves.count) / 2.0).rounded(.down)))"
         
         return parts.joined(separator: " ")
     }

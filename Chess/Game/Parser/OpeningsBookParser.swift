@@ -26,7 +26,7 @@ final class OpeningsBookParser {
                 throw ParsingError.invalidPGNFormat(line)
             }
             trie.insert((title: "\(match.name)",
-                         moves: PGNParser.parseMoves(pgn: "\(match.moves)")))
+                         moves: PGNParser.parseMovesAndResult(pgn: "\(match.moves)").moves))
         }
         return trie
     }

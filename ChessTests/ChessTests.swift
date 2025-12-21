@@ -49,6 +49,7 @@ class ChessTests {
                 let movesCount = await getMovesCount(from: game)
                 #expect(movesCount == testPosition.movesCount, "\(testPosition.fen)")
                 #expect(game.notation.state == testPosition.state, "\(testPosition.fen)")
+                #expect(FENParser.parse(game: game) == testPosition.fen, "\(testPosition.fen)")
             }
         } catch {
             #expect(Bool(false), "\(error.localizedDescription)")
@@ -81,7 +82,7 @@ class ChessTests {
                 #expect(game.notation.fullMoves == testGame.movesCount, "\(testGame.name)")
                 #expect(game.notation.state == testGame.state, "\(testGame.name)")
                 #expect(game.notation.openingTitle == testGame.opening, "\(testGame.name)")
-                #expect(String(await PGNParser.parse(game: game).characters[...]) == testGame.pgn, "\(testGame.name)")
+                #expect(String(await PGNParser.parse(game: game).characters[...]).replacingOccurrences(of: "\u{00a0}", with: " ") == testGame.pgn, "\(testGame.name)")
             }
         } catch {
             #expect(Bool(false), "\(error.localizedDescription)")

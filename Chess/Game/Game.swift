@@ -45,23 +45,34 @@ extension Game {
         var destinationPiece: Piece?
         var promotionPiece: Piece?
         var move = Notation.Move.unknown
+        
+        let similarPieces: [Piece] = needToUpdateNotation ? await {
+            var sp = [Piece]()
+            for p in board.pieces where p.type == piece.type && p.color == piece.color && p != piece {
+                if (await moves(for: p)).contains(destination.position) {
+                    sp.append(p.copy)
+                }
+            }
+            return sp
+        }() : []
+        
         if let source = piece.position {
             sourcePiece = piece.copy
             piece.movesCount += 1
             destinationPiece = square(at: destination.position).piece?.copy
-            move = .move(piece: sourcePiece, to: destination.position, captured: destinationPiece)
+            move = .move(piece: sourcePiece, to: destination.position, captured: destinationPiece, similartPieces: similarPieces)
             switch piece.type {
             case .pawn:
                 if destinationPiece == nil, destination.position.file != source.file {
                     // enPassant
                     let enPassantEnemyPosition = Position(rank: source.rank, file: destination.position.file)
-                    move = .move(piece: sourcePiece, to: destination.position, captured: square(at: enPassantEnemyPosition).piece?.copy)
+                    move = .move(piece: sourcePiece, to: destination.position, captured: square(at: enPassantEnemyPosition).piece?.copy, similartPieces: similarPieces)
                     square(at: enPassantEnemyPosition).piece = nil
                 } else if destination.position.rank == 0 || destination.position.rank == Game.size - 1 {
                     // promotion
                     promotionPiece = await onPromote?(piece, destination.position).value ?? Piece(color: piece.color, type: .queen, movesCount: piece.movesCount)
                     promotionPiece?.movesCount = piece.movesCount
-                    move = .move(piece: sourcePiece, to: destination.position, captured: destinationPiece, promoted: promotionPiece)
+                    move = .move(piece: sourcePiece, to: destination.position, captured: destinationPiece, promoted: promotionPiece, similartPieces: similarPieces)
                 }
             case .king:
                 // castle
@@ -87,7 +98,7 @@ extension Game {
     
     func undo(for resetPiece: Piece? = nil) {
         switch notation.undo() {
-        case let .move(piece, position, captured, promoted):
+        case let .move(piece, position, captured, promoted, _):
             guard let piecePosition = piece.position else { break }
             let originalPiece = resetPiece ?? square(at: position).piece
             square(at: position).piece = nil
@@ -115,8 +126,8 @@ extension Game {
         notationPublisher.send(notation)
     }
     
-    func start() async {
-        notation.start()
+    func start(with result: [Int: String]? = nil) async {
+        notation.start(with: result)
         await updateNotation()
     }
     
@@ -144,7 +155,7 @@ extension Game {
         switch piece.type {
         case .pawn:
             // enPassant
-            if case let .move(pawn, pawnPosition, _, _) = notation.moves.last, let prevPawnPosition = pawn.position,
+            if case let .move(pawn, pawnPosition, _, _, _) = notation.moves.last, let prevPawnPosition = pawn.position,
                pawn.type == .pawn, pawn.movesCount == 1, abs(prevPawnPosition.rank - pawnPosition.rank) == 2 {
                 for file in [-1, 1] {
                     guard position.rank == pawnPosition.rank, (position.file - pawnPosition.file) == file else { continue }
@@ -240,7 +251,7 @@ extension Game {
         guard notation.positionsCount[position, default: 0] < 3 else { return .threefoldRepetition }
         guard isSufficientMaterial(pieces.filter { $0.color == color }) ||
                 isSufficientMaterial(pieces.filter { $0.color != color }) else { return .insufficientMaterial }
-        guard notation.fullMoves - notation.lastActiveMoveIndex < 50 else { return .fiftyMoveRule }
+        guard notation.lastActiveMoveIndex < 100 else { return .fiftyMoveRule }
         return nil
     }
     
@@ -275,9 +286,9 @@ extension Game {
             guard let drawReason = isDraw(isCheck: false, hasMoves: hasMoves, position: position, color: opponentColor) else { return .play }
             return .draw(reason: drawReason)
         }()
-        let opening: OpeningsTrie? = await {
+        let opening: OpeningsTrie? = {
             guard let move else { return nil }
-            return notation.openingTrie?.children[await PGNParser.parseMove(game: self, move: move)]
+            return notation.openingTrie?.children[PGNParser.parseMove(game: self, move: move)]
         }()
         notation.update(with: move, state: state, position: position, opening: opening)
         notationPublisher.send(notation)

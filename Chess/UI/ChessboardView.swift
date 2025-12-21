@@ -380,7 +380,7 @@ extension ChessboardView {
             guard let (_, moves) = await cpu.search(game: game, gameSettings: gameSettings) else { return }
             var piece: Piece?, square: Square?
             switch moves.first {
-            case let .move(_piece, position, _, _):
+            case let .move(_piece, position, _, _, _):
                 piece = _piece
                 square = game.square(at: position)
             case let .castle(king, _, newKingPosition, _, _):
@@ -446,7 +446,7 @@ extension ChessboardView {
             checked = nil
         }
         switch notation.move {
-        case let .move(piece, position, captured, _):
+        case let .move(piece, position, captured, _, _):
             lastMove = (from: piece.position!, to: position)
             if let captured {
                 soundManager?.play(.capture)
