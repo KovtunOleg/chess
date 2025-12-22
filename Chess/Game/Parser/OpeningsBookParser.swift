@@ -12,7 +12,7 @@ final class OpeningsBookParser {
     
     enum ParsingError: Error {
         case missingFile(String)
-        case invalidPGNFormat(String)
+        case invalidCSVFormat(String)
     }
     
     static func parse() throws -> OpeningsTrie {
@@ -23,7 +23,7 @@ final class OpeningsBookParser {
         let trie = OpeningsTrie()
         for line in content.dropFirst() {
             guard let match = try /"(?<ECO>.*)","(?<name>.*)","(?<moves>.*)"/.wholeMatch(in: line) else {
-                throw ParsingError.invalidPGNFormat(line)
+                throw ParsingError.invalidCSVFormat(line)
             }
             trie.insert((title: "\(match.name)",
                          moves: PGNParser.parseMovesAndResult(pgn: "\(match.moves)").moves))
