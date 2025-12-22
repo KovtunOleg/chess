@@ -253,7 +253,7 @@ struct ChessboardView: View {
     private func promoteView(size: CGFloat) -> some View {
         if let piece = promoted?.piece, let position = promoted?.position {
             let rotate = gameSettings.rotateBoard
-            let types: [Piece.`Type`] = [.queen, .rook, .bishop, .knight]
+            let types = Piece.promoteTypes
             let pieces = {
                 var pieces = types.map { Piece(color: game.turn, type: $0) }
                 if (piece.color == .black && !rotate) { pieces.reverse() }
@@ -378,11 +378,12 @@ extension ChessboardView {
         guard !gameSettings.playerCanMove(game.turn) else { return }
         Task {
             guard let (_, moves) = await cpu.search(game: game, gameSettings: gameSettings) else { return }
-            var piece: Piece?, square: Square?
+            var piece: Piece?, square: Square?, onPromote: ((Piece, Position) -> Task<Piece?, Never>)?
             switch moves.first {
-            case let .move(_piece, position, _, _, _):
+            case let .move(_piece, position, _, promoted, _):
                 piece = _piece
                 square = game.square(at: position)
+                onPromote = { _, _ in Task { promoted } }
             case let .castle(king, _, newKingPosition, _, _):
                 piece = king
                 square = game.square(at: newKingPosition)
@@ -390,7 +391,7 @@ extension ChessboardView {
                 break
             }
             guard let piece, let square else { return }
-            await game.move(piece, to: square, force: true)
+            await game.move(piece, to: square, onPromote: onPromote, force: true)
         }
     }
     

@@ -1,6 +1,6 @@
 ♟️ Chess
 
-A modern Chess game built for ***macOS*** written in **Swift*** using the **SwiftUI** declarative framework.
+A modern chess game built for **macOS** written in **Swift** using the **SwiftUI** declarative framework.
 The project focuses on clean architecture, smooth animations, and a simple, elegant user interface.
 
 ⸻
@@ -57,7 +57,7 @@ This separation keeps the codebase clean, testable, and easy to extend.
 
 https://github.com/user-attachments/assets/7f20450f-94f6-47f7-ab29-0e26b8fffbb1
 
-https://github.com/user-attachments/assets/668f00ab-8375-42a5-82fe-7f9667b1af74
+https://github.com/user-attachments/assets/292db4c6-d7ee-4d2d-8360-694725c99c8b
 
 ⸻
 

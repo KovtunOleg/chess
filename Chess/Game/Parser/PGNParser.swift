@@ -84,7 +84,7 @@ final class PGNParser {
                     let index = i * 2 + j + 1
                     let isLastMove = index == moves.count
                     let moveDescription = parseMove(game: game, move: move, shorten: shorten)
-                    var attributedMove = AttributedString((j == 0 ? "\(i + 1).\u{00a0}" : "") + moveDescription + states[index].description + (isLastMove ? "": " "))
+                    var attributedMove = AttributedString((j == 0 ? "\(i + 1).\u{00a0}" : "") + moveDescription + states[min(index,states.count - 1)].description + (isLastMove ? "": " "))
                     attributedMove.font = isLastMove ? lastMoveFont : font
                     attributedString.append(attributedMove)
                 }

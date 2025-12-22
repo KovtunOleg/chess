@@ -42,9 +42,11 @@ class Piece {
 }
 
 extension Piece: Comparable {
-    static let order: [Piece.`Type`] = [.pawn, .knight, .bishop, .rook, .queen, .king]
+    static let orderTypes: [Piece.`Type`] = [.pawn, .knight, .bishop, .rook, .queen, .king]
+    static let promoteTypes: [Piece.`Type`] = [.queen, .rook, .bishop, .knight]
+    
     static func < (lhs: Piece, rhs: Piece) -> Bool {
-        Self.order.firstIndex(of: lhs.type)! < Self.order.firstIndex(of: rhs.type)!
+        Self.orderTypes.firstIndex(of: lhs.type)! < Self.orderTypes.firstIndex(of: rhs.type)!
     }
 }
 

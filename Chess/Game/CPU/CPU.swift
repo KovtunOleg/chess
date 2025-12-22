@@ -8,7 +8,8 @@
 import Foundation
 
 final class CPU {
-    typealias Line = (Int, [Notation.Move])
+    typealias Line = (score: Int, moves: [Notation.Move])
+    typealias Move = (piece: Piece, position: Position, promoteType: Piece.`Type`)
     private var task: Task<(Int, [Notation.Move])?, Never>?
     
     /// returns position evaluation at the given `depth` and the best moves line
@@ -60,8 +61,8 @@ extension CPU {
             switch game.turn {
             case .white:
                 bestScore = Int.min
-                for (piece, position) in await sortedMoves(game: game) {
-                    guard let move = await game.move(piece, to: game.square(at: position), force: true) else { continue }
+                for (piece, position, promoteType) in await sortedMoves(game: game) {
+                    guard let move = await game.move(piece, to: game.square(at: position), onPromote: promote(piece: piece, promoteType: promoteType), force: true) else { continue }
                     guard let (score, moves) = await dfs(game: game, depth: depth - 1, until: until, alpha: alpha, beta: beta, moves: moves + [move]) else { return nil }
                     game.undo(for: piece)
                     bestMoves = bestMoves.isEmpty ? moves : bestMoves
@@ -76,8 +77,8 @@ extension CPU {
                 }
             case .black:
                 bestScore = Int.max
-                for (piece, position) in await sortedMoves(game: game) {
-                    guard let move = await game.move(piece, to: game.square(at: position), force: true) else { continue }
+                for (piece, position, promoteType) in await sortedMoves(game: game) {
+                    guard let move = await game.move(piece, to: game.square(at: position), onPromote: promote(piece: piece, promoteType: promoteType), force: true) else { continue }
                     guard let (score, moves) = await dfs(game: game, depth: depth - 1, until: until, alpha: alpha, beta: beta, moves: moves + [move]) else { return nil }
                     game.undo(for: piece)
                     bestMoves = bestMoves.isEmpty ? moves : bestMoves
@@ -106,14 +107,20 @@ extension CPU {
         return whiteScore - blackScore
     }
 
-    private func sortedMoves(game: Game) async -> [(Piece, Position)] {
-        var moves = [(Piece, Position)]()
+    private func sortedMoves(game: Game) async -> [Move] {
+        var moves = [Move]()
         for piece in game.board.pieces.filter({ $0.color == game.turn }) {
-            moves.append(contentsOf: (await game.moves(for: piece)).map { (piece, $0) })
+            let promoteType: Piece.`Type` = .queen
+            let content: [Move] = (await game.moves(for: piece))
+                .flatMap { position in
+                    guard piece.type == .pawn, position.rank == Game.size - 1 || position.rank == 0 else { return [(piece, position, promoteType)] }
+                    return Piece.promoteTypes.map { (piece, position, $0) }
+                }
+            moves.append(contentsOf: content)
         }
         return moves.sorted { lhs, rhs in
-            let lhsPiece = lhs.0, rhsPiece = rhs.0
-            let lhsPosition = lhs.1, rhsPosition = rhs.1
+            let lhsPiece = lhs.piece, rhsPiece = rhs.piece
+            let lhsPosition = lhs.position, rhsPosition = rhs.position
             let lhsPromotes = lhsPiece.type == .pawn && (lhsPosition.rank == Game.size - 1 || lhsPosition.rank == 0)
             let rhsPromotes = rhsPiece.type == .pawn && (rhsPosition.rank == Game.size - 1 || rhsPosition.rank == 0)
             guard lhsPromotes == rhsPromotes else { return lhsPromotes && !rhsPromotes }
@@ -133,5 +140,13 @@ extension CPU {
             return nil
         }
         return (0, [move])
+    }
+    
+    private func promote(piece: Piece, promoteType: Piece.`Type`) -> ((Piece, Position) -> Task<Piece?, Never>)? {
+        { (piece, position) in
+            Task {
+                Piece(color: piece.color, type: promoteType)
+            }
+        }
     }
 }
